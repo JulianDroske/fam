@@ -1,5 +1,5 @@
 /*
-  tinymap - map implementation with simplified AVL
+  tinymap - map implementation with binary search based on simplified AVL
   adapted from my private SC project - 2026 @ juliandroske
 */
 
@@ -129,10 +129,20 @@ int tinymap_fix(struct tinymap *map, int index) {
 
 int tinymap_add(struct tinymap *map, const char *key, int len, long int value) {
   if (len <= 0) return 0;
-  // TODO realloc
-  if (map->nodes_len + 1 >= map->nodes_cap ||
-    map->keys_len + len >= map->keys_size)
-    return 0;
+
+  if (map->keys_len + len >= map->keys_size) {
+    size_t new_size = map->keys_len + len + 512;
+    void *new_mem = realloc(map->keys, new_len);
+    if (!new_mem) return 0;
+    map->keys = (char *) new_mem; map->keys_size = new_size;
+  }
+
+  if (map->nodes_len + 1 >= map->nodes_cap) {
+    size_t new_cap = map->nodes_cap + 32;
+    void *new_mem = realloc(map->nodes, new_cap * sizeof(struct tinymap_node));
+    if (!new_mem) return 0;
+    map->nodes = (struct tinymap_node *) new_mem; map->nodes_cap = new_cap;
+  }
 
   if (tinymap_get(map, NULL, key, len)) return 0;
   int index = map->nodes_len;
