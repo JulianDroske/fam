@@ -3,25 +3,10 @@
   adapted from my private SC project - 2026 @ juliandroske
 */
 
+#include "tinymap.h"
+
 #include "stddef.h"
 #include "stdlib.h"
-
-struct tinymap_node {
-  long int value;
-  /* key_len indicates existence */
-  size_t key_off, key_len;
-  unsigned int key_hash;
-  int children[2], parent, factor;
-};
-
-struct tinymap {
-  struct tinymap_node *nodes; size_t nodes_len, nodes_cap;
-  char *keys; size_t keys_len, keys_size;
-  int root;
-
-  /* states */
-  unsigned int hash; int index;
-};
 
 void tinymap_fini(struct tinymap *map) {
   if (map->nodes) { free(map->nodes); map->nodes = NULL; }
@@ -44,19 +29,19 @@ int tinymap_init(struct tinymap *map) {
   return 1;
 }
 
-int tinymap_cmp(const char *key1, int len1, const char *key2, int len2) {
-  int n = len1 < len2? len1: len2;
-  for (int i = 0; i < n; ++i) {
+int tinymap_cmp(const char *key1, size_t len1, const char *key2, size_t len2) {
+  size_t n = len1 < len2? len1: len2;
+  for (size_t i = 0; i < n; ++i) {
     char k = *key2 - *key1; if (k) return k;
     ++key1, ++key2;
   }
   return len2 - len1;
 }
 
-int tinymap_get(struct tinymap *map, long int *value, const char *key, int len) {
+int tinymap_find(struct tinymap *map, struct tinymap_node **dest_node, const char *key, size_t len) {
   /* hash, based on FNV-1a */
   unsigned int hash = 2166136261;
-  for (int i = 0; i < len; ++i) hash = (hash ^ key[i]) * 16777619;
+  for (size_t i = 0; i < len; ++i) hash = (hash ^ key[i]) * 16777619;
   map->hash = hash;
 
   int index = map->index = map->root;
@@ -65,7 +50,7 @@ int tinymap_get(struct tinymap *map, long int *value, const char *key, int len) 
     struct tinymap_node *node = &map->nodes[map->index];
     if (hash == node->key_hash &&
       !tinymap_cmp(map->keys + node->key_off, node->key_len, key, len)) {
-      if (value) *value = node->value;
+      if (dest_node) *dest_node = node;
       return 1;
     } else index = node->children[node->key_hash < hash];
   }
@@ -127,12 +112,12 @@ int tinymap_fix(struct tinymap *map, int index) {
   return 1;
 }
 
-int tinymap_add(struct tinymap *map, const char *key, int len, long int value) {
+int tinymap_add(struct tinymap *map, const char *key, size_t len, long int value) {
   if (len <= 0) return 0;
 
   if (map->keys_len + len >= map->keys_size) {
     size_t new_size = map->keys_len + len + 512;
-    void *new_mem = realloc(map->keys, new_len);
+    void *new_mem = realloc(map->keys, new_size);
     if (!new_mem) return 0;
     map->keys = (char *) new_mem; map->keys_size = new_size;
   }
@@ -144,7 +129,7 @@ int tinymap_add(struct tinymap *map, const char *key, int len, long int value) {
     map->nodes = (struct tinymap_node *) new_mem; map->nodes_cap = new_cap;
   }
 
-  if (tinymap_get(map, NULL, key, len)) return 0;
+  if (tinymap_find(map, NULL, key, len)) return 0;
   int index = map->nodes_len;
   struct tinymap_node *node = &map->nodes[map->nodes_len++];
   node->value = value; node->key_off = map->keys_len; node->key_len = len;
@@ -162,5 +147,41 @@ int tinymap_add(struct tinymap *map, const char *key, int len, long int value) {
   struct tinymap_node *p = &map->nodes[node->parent];
   p->children[map->hash >= p->key_hash] = index;
   return tinymap_fix(map, index);
+}
+
+/* utils */
+
+int tinymap_get(struct tinymap *map, long int *value, const char *key, size_t len) {
+  struct tinymap_node *node = NULL;
+  if (!tinymap_find(map, &node, key, len)) return 0;
+  if (value) *value = node->value;
+  return 1;
+}
+
+int tinymap_set(struct tinymap *map, const char *key, size_t len, long int value) {
+  struct tinymap_node *node = NULL;
+  if (!tinymap_find(map, &node, key, len)) return 0;
+  node->value = value;
+  return 1;
+}
+
+int tinymap_len(struct tinymap *map) {
+  return map->nodes_len;
+}
+
+void tinymap_empty(struct tinymap *map) {
+  map->root = -1;
+  map->nodes_len = 0; map->keys_len = 0;
+}
+
+int tinymap_enum(struct tinymap *map, struct tinymap_node **node) {
+  if (!node || !map->nodes_len) return 0;
+  if (!*node) { *node = map->nodes; return 1; }
+  if (*node < map->nodes + map->nodes_len - 1) { ++*node; return 1; }
+  return 0;
+}
+
+const char *tinymap_node_key(struct tinymap *map, struct tinymap_node *node) {
+  return map->keys + node->key_off;
 }
 
