@@ -169,7 +169,7 @@ int tinymap_len(struct tinymap *map) {
   return map->nodes_len;
 }
 
-void tinymap_empty(struct tinymap *map) {
+void tinymap_clear(struct tinymap *map) {
   map->root = -1;
   map->nodes_len = 0; map->keys_len = 0;
 }

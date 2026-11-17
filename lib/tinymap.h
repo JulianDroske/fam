@@ -23,13 +23,14 @@ struct tinymap {
 int tinymap_init(struct tinymap *map);
 void tinymap_fini(struct tinymap *map);
 
-int tinymap_find(struct tinymap *map, struct tinymap_node **node, const char *key, size_t len);
 int tinymap_add(struct tinymap *map, const char *key, size_t len, long int value);
 int tinymap_get(struct tinymap *map, long int *value, const char *key, size_t len);
 int tinymap_set(struct tinymap *map, const char *key, size_t len, long int value);
-
 int tinymap_len(struct tinymap *map);
-void tinymap_empty(struct tinymap *map);
+void tinymap_clear(struct tinymap *map);
+
+/* low level */
+int tinymap_find(struct tinymap *map, struct tinymap_node **node, const char *key, size_t len);
 int tinymap_enum(struct tinymap *map, struct tinymap_node **node);
 const char *tinymap_node_key(struct tinymap *map, struct tinymap_node *node);
 
