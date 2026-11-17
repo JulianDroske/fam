@@ -501,12 +501,14 @@ int main_orphans(int argc, const char **argv) {
   int perform_delete = opt_delete != NULL;
 
   sqlite3_stmt *stmt = db_stmt(db,
-    "select file.file_path, file.file_time_create, exe.exe_id, exe.exe_path, pkg.pkg_name, pm.pm_name from file"
+    "select file.file_path, file.file_time_create, exe.exe_id, exe.exe_path,"
+    "       pkg.pkg_name, pm.pm_name from file"
     "  left join exe on exe.exe_id = file.exe_id_create"
     "  left join pkg on pkg.pkg_id = exe.pkg_id"
     "  left join pm on pm.pm_id = pkg.pm_id"
-    "  where file.file_exist and not exe.exe_exist and"
-    "    (pkg.pkg_exist or (? or pkg.pkg_exist is not null));",
+    "  where file.file_exist and"
+    "    (not exe.exe_exist or (not pkg.pkg_exist and"
+    "    (? or exe.pkg_id is not null) ));",
     "i", include_nopkg);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
   while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
