@@ -103,6 +103,7 @@ void print_help() {
     "                            available: apk, dpkg" "\n"
     "\n"
     "commands & params:" "\n"
+    "\n"
     "| m, monitor [dirs...]      monitor file changes and save to database" "\n"
     "                            defaults to monitoring all dirs (/)" "\n"
     "    -n, --dry-run             do not write to database" "\n"
@@ -233,32 +234,34 @@ int main_monitor(int argc, const char **argv) {
       continue;
     }
 
-    static char ops[6];
-    char *o = ops; 
-    /* reserved for further monitored operations */
-    if (mask & FAN_OPEN) *o++ = 'O';
-    if (mask & FAN_ACCESS) *o++ = 'A';
-    if (mask & FAN_CLOSE) *o++ = 'C';
-    if (mask & FAN_CREATE) *o++ = '+';
-    if (mask & FAN_DELETE) *o++ = '-';
-    if (mask & FAN_MOVED_FROM) *o++ = '<';
-    if (mask & FAN_MOVED_TO) *o++ = '>';
-    *o = 0;
+    if (mask & filter_ops) {
+      static char ops[6];
+      char *o = ops; 
+      /* reserved for further monitored operations */
+      if (mask & FAN_OPEN) *o++ = 'O';
+      if (mask & FAN_ACCESS) *o++ = 'A';
+      if (mask & FAN_CLOSE) *o++ = 'C';
+      if (mask & FAN_CREATE) *o++ = '+';
+      if (mask & FAN_DELETE) *o++ = '-';
+      if (mask & FAN_MOVED_FROM) *o++ = '<';
+      if (mask & FAN_MOVED_TO) *o++ = '>';
+      *o = 0;
 
-    for (const char *f = output_format; *f; ++f) {
-      if (*f == '%') {
-        switch (*++f) {
-        case 'T': printf("%s", timestamp_localstring(timestamp)); break;
-        case 'E': printf("%s", proc.pathname); break;
-        case 'P': printf("%d", metadata->pid); break;
-        case 'F': printf("%s", ev.filepath); break;
-        case 'O': printf("%s", ops); break;
-        default: printf("%c", *f); break;
+      for (const char *f = output_format; *f; ++f) {
+        if (*f == '%') {
+          switch (*++f) {
+          case 'T': printf("%s", timestamp_localstring(timestamp)); break;
+          case 'E': printf("%s", proc.pathname); break;
+          case 'P': printf("%d", metadata->pid); break;
+          case 'F': printf("%s", ev.filepath); break;
+          case 'O': printf("%s", ops); break;
+          default: printf("%c", *f); break;
+          }
         }
+        else printf("%c", *f);
       }
-      else printf("%c", *f);
+      puts("");
     }
-    puts("");
 
     if (!save_db) continue;
 
