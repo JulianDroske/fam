@@ -69,12 +69,21 @@ int pm_exec_char_space(char ch) {
 size_t pm_exec_readfield(struct pm_exec *e, char *dest, size_t len) {
   while (pm_exec_char_space(e->ch))
     if (!pm_exec_next(e, NULL)) break;
-  size_t pos = 0;
-  while (pos < len && !pm_exec_char_space(e->ch)) {
-    *dest++ = e->ch; ++pos;
+  size_t pos = 0, actual_len = 0;
+  while (!pm_exec_char_space(e->ch)) {
+    if (pos < len) { *dest++ = e->ch; ++pos; }
+    ++actual_len;
     if (!pm_exec_next(e, NULL)) break;
   }
+  if (pos != actual_len)
+    fprintf(stderr, "pm: field too long for buffer length %ld\n", len);
   return pos;
+}
+
+int pm_exec_skipline(struct pm_exec *e) {
+  while (e->ch != '\n')
+    if (!pm_exec_next(e, NULL)) break;
+  return e->ch == '\n';
 }
 
 int pm_exec_close(struct pm_exec *e) {
@@ -167,11 +176,11 @@ int pm_apk_checkpkgs(struct tinymap *map) {
   free(args); free(mem);
   if (!status) return 0;
 
-  char buf[PM_NAME_MAX + 1];
+  char buf[PM_NAME_MAX];
   for (size_t len = 0; (len = pm_exec_readfield(&e, buf, PM_NAME_MAX)) > 0; len = 0) {
     struct tinymap_node *node = NULL;
     if (!tinymap_find(map, &node, buf, len)) {
-      fprintf(stderr, "failed to find pkg %*.*s in map\n", (int) len, (int) len, buf);
+      fprintf(stderr, "failed to find pkg %.*s in map\n", (int) len, buf);
       break;
     }
     node->value |= PM_TINYMAP_PKG_EXIST;
@@ -196,6 +205,40 @@ int pm_dpkg_checkpkg(int *exist, const char *name) {
   return pm_readexec(NULL, 0, "dpkg", "dpkg", "-s", name, NULL);
 }
 
+int pm_dpkg_checkpkgs(struct tinymap *map) {
+  static const char *pre[] = { "dpkg", "--get-selections", NULL };
+
+  /* empty arg causes dpkg output everything */
+  if (!tinymap_len(map)) return 1;
+
+  size_t len = tinymap_len(map) + sizeof(pre) / sizeof(pre[0]);
+  const char **args = (const char **) malloc(len * sizeof(char *));
+  if (!args) return 0;
+  const char **a = args;
+  for (const char **p = pre; *p; ++p) *a++ = *p;
+  char *mem = pm_copy_tinymap_keys((char **) a, map);
+  if (!mem) { free(args); return 0; }
+  a += tinymap_len(map);
+  *a = NULL;
+
+  struct pm_exec e = {};
+  int status = pm_exec_open(&e, "dpkg", args);
+  free(args); free(mem);
+  if (!status) return 0;
+
+  char buf[PM_NAME_MAX];
+  for (size_t len = 0; (len = pm_exec_readfield(&e, buf, PM_NAME_MAX)) > 0; len = 0) {
+    struct tinymap_node *node = NULL;
+    if (!tinymap_find(map, &node, buf, len)) {
+      fprintf(stderr, "failed to find pkg %.*s in map\n", (int) len, buf);
+      break;
+    }
+    node->value |= PM_TINYMAP_PKG_EXIST;
+    if (!pm_exec_skipline(&e)) break;
+  }
+  return pm_exec_close(&e);
+}
+
 /* pm */
 
 struct pm pm_backends[] = {
@@ -204,7 +247,7 @@ struct pm pm_backends[] = {
     pm_apk_checkpkg, pm_apk_checkpkgs },
   { "dpkg",
     pm_dpkg_avail, pm_dpkg_queryfile,
-    pm_dpkg_checkpkg },
+    pm_dpkg_checkpkg, pm_dpkg_checkpkgs },
   { NULL },
 };
 
