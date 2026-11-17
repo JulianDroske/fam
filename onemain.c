@@ -1,3 +1,5 @@
+/* compile with -lsqlite3 */
+
 #include "lib/tinyradix.c"
 #include "lib/tinymap.c"
 #include "lib/tinycli.c"
