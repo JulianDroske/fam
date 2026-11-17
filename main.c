@@ -14,6 +14,7 @@
 #include "errno.h"
 #include "sys/stat.h"
 
+#include "lib/tinymap.h"
 #include "lib/tinycli.h"
 #include "lib/fatrack.h"
 #include "lib/pstrack.h"
@@ -541,6 +542,28 @@ int main_forget(int argc, const char **argv) {
   return 0;
 }
 
+int main_update_pkgs(sqlite3 *db, struct pm *pm, struct tinymap *pkg_map) {
+  if (!pm || !tinymap_len(pkg_map)) return 0;
+
+  if (!pm->checkpkgs(pkg_map)) {
+    main_log("failed to query package status");
+    return 0;
+  }
+
+  struct tinymap_node *node = NULL;
+  while (tinymap_enum(pkg_map, &node)) {
+    static char name[PM_NAME_MAX];
+    const char *key = tinymap_node_key(pkg_map, node);
+    strncpy(name, key, node->key_len);
+    if (!db_set_pkg_exist(db,
+      node->value & PM_TINYMAP_RESERVED_MASK,
+      node->value & PM_TINYMAP_PKG_EXIST))
+      main_log("failed to set status of package %s", name);
+  }
+
+  return 1;
+}
+
 int main_update(int argc, const char **argv) {
   sqlite3 *db = main_db;
 
@@ -590,7 +613,14 @@ int main_update(int argc, const char **argv) {
 
   /* package */
 
-  stmt = db_stmt(db, "select pkg.pkg_id, pkg.pkg_name, pkg.pkg_exist, pm.pm_id, pm.pm_name from pkg left join pm on pm.pm_id = pkg.pm_id;", NULL);
+  struct tinymap pkg_map = {};
+  if (!tinymap_init(&pkg_map)) {
+    main_log("failed to init tinymap"); return 1;
+  }
+
+  stmt = db_stmt(db,
+    "select pkg.pkg_id, pkg.pkg_name, pkg.pkg_exist, pm.pm_id, pm.pm_name"
+    "  from pkg left join pm on pm.pm_id = pkg.pm_id order by pkg.pm_id;", NULL);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
   int last_pm_id = 0; struct pm *pkg_pm = NULL;
   while (sqlite3_step(stmt) == SQLITE_ROW) {
@@ -598,6 +628,8 @@ int main_update(int argc, const char **argv) {
     db_stmt_columns(stmt, "isiis", &pkg_id, &pkg_name, &pkg_exist, &pm_id, &pm_name);
 
     if (last_pm_id != pm_id) {
+      if (pkg_pm) main_update_pkgs(db, pkg_pm, &pkg_map);
+      tinymap_clear(&pkg_map);
       pkg_pm = pm_get(pm_name);
       if (!pkg_pm) main_log("failed to get package manager %s", pm_name);
       last_pm_id = pm_id;
@@ -606,14 +638,24 @@ int main_update(int argc, const char **argv) {
     if (!pkg_pm) { main_log("skipped package %s", pkg_name); continue; }
 
     // TODO optimize
-    int exist = 0;
-    if (pkg_pm->checkpkg(&exist, pkg_name)) {
-      if (exist != pkg_exist && !db_set_pkg_exist(db, pkg_id, exist))
-        main_log("failed to update status for package %s", pkg_name);
+    long int value = pkg_id & PM_TINYMAP_RESERVED_MASK;
+    if (value != pkg_id) {
+      main_log("tinymap mask overflow detected, abort update");
+      pkg_pm = NULL;
+      break;
     }
-    else main_log("failed to check status of package %s with pm %s", pkg_name, pm_name);
+
+    if (!tinymap_add(&pkg_map, pkg_name, strlen(pkg_name), value))
+      main_log("warning: failed to add pkg %s into tinymap", pkg_name);
+    // if (pkg_pm->checkpkg(&exist, pkg_name)) {
+    //   if (exist != pkg_exist && !db_set_pkg_exist(db, pkg_id, exist))
+    //     main_log("failed to update status for package %s", pkg_name);
+    // }
+    // else main_log("failed to check status of package %s with pm %s", pkg_name, pm_name);
   }
   sqlite3_finalize(stmt);
+  if (pkg_pm) main_update_pkgs(db, pkg_pm, &pkg_map);
+  tinymap_fini(&pkg_map);
 
   return 0;
 }
@@ -704,5 +746,4 @@ int main(int argc, const char **argv) {
   if (main_db) sqlite3_close(main_db);
   return ret;
 }
-
 
