@@ -11,8 +11,6 @@ CC ?= cc
 CFLAGS += -std=c99
 LIBS += -lsqlite3
 
-CTH := tool/c2h.sh
-
 all: $(OUT)
 
 %.o: %.c $(DEPS) Makefile
