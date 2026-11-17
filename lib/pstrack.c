@@ -173,7 +173,14 @@ void pstrack_fini(struct pstrack *t) {
   if (t->mutex_inited) {
     if (!pthread_mutex_destroy(&t->mutex)) t->mutex_inited = 0;
   }
-  if (t->procs) { free(t->procs); t->procs = NULL; }
+  if (t->procs) {
+    size_t len = t->procs_cap;
+    for (struct pstrack_proc *p = t->procs; len; ++p, --len) {
+      p->appear = 0;
+      if (p->pathname) { free(p->pathname); p->pathname = NULL; }
+    }
+    free(t->procs); t->procs = NULL;
+  }
 }
 
 int pstrack_init(struct pstrack *t, size_t init_cap) {
