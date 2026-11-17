@@ -107,8 +107,9 @@ void print_help() {
     "                            defaults to monitoring all dirs (/)" "\n"
     "    -n, --dry-run             do not write to database" "\n"
     "    -o, --operations <ops>    filter file operations on output" "\n"
-    "                                C: create, D: delete, M: move" "\n"
-    "                                e.g. fap monitor -o 'CDM'" "\n"
+    "                                +: create, -: delete" "\n"
+    "                                <: move from, >: move to, =: move" "\n"
+    "                                e.g. fap monitor -o '+-='" "\n"
     "    -f, --format <fmt>        output format" "\n"
     "                                %T - time     %E - exe full path" "\n"
     "                                %P - exe pid  %N - target file path" "\n"
@@ -161,9 +162,11 @@ int main_monitor(int argc, const char **argv) {
     const char *spec = opt_operations[1];
     for (const char *s = spec; *s; ++s) {
       switch (*s) {
-      case 'C': case 'c': filter_ops |= FAN_CREATE; break;
-      case 'D': case 'd': filter_ops |= FAN_DELETE; break;
-      case 'M': case 'm': filter_ops |= FAN_MOVE; break;
+      case '+': filter_ops |= FAN_CREATE; break;
+      case '-': filter_ops |= FAN_DELETE; break;
+      case '<': filter_ops |= FAN_MOVED_FROM; break;
+      case '>': filter_ops |= FAN_MOVED_TO; break;
+      case '=': filter_ops |= FAN_MOVE; break;
       default: main_log("unrecognized operation: %c", *s);
         print_help(); return 1;
       }
@@ -220,7 +223,9 @@ int main_monitor(int argc, const char **argv) {
 
     struct fanotify_event_metadata *metadata = &ev.metadata;
 
-    // TODO handle move
+    unsigned int mask = metadata->mask;
+    int create = mask & (FAN_CREATE | FAN_MOVED_TO),
+      delete = mask & (FAN_DELETE | FAN_MOVED_FROM);
 
     struct pstrack_procinfo proc = {};
     if (!pstrack_query(&pstrack, &proc, metadata->pid)) {
@@ -229,12 +234,15 @@ int main_monitor(int argc, const char **argv) {
     }
 
     static char ops[6];
-    char *o = ops;
-    if (metadata->mask & FAN_OPEN) *o++ = 'O';
-    if (metadata->mask & FAN_ACCESS) *o++ = 'A';
-    if (metadata->mask & FAN_CREATE) *o++ = 'C';
-    if (metadata->mask & FAN_DELETE) *o++ = 'D';
-    if (metadata->mask & FAN_MOVE) *o++ = 'M';
+    char *o = ops; 
+    /* reserved for further monitored operations */
+    if (mask & FAN_OPEN) *o++ = 'O';
+    if (mask & FAN_ACCESS) *o++ = 'A';
+    if (mask & FAN_CLOSE) *o++ = 'C';
+    if (mask & FAN_CREATE) *o++ = '+';
+    if (mask & FAN_DELETE) *o++ = '-';
+    if (mask & FAN_MOVED_FROM) *o++ = '<';
+    if (mask & FAN_MOVED_TO) *o++ = '>';
     *o = 0;
 
     for (const char *f = output_format; *f; ++f) {
@@ -285,14 +293,14 @@ int main_monitor(int argc, const char **argv) {
 
     const char *filepath = ev.filepath;
     /* fanotify may report an event with CD */
-    if (!keep_deleted && metadata->mask & FAN_DELETE)
+    if (!keep_deleted && delete)
       db_del_file(db, filepath);
     else {
-      if (metadata->mask & FAN_CREATE) {
+      if (create) {
         if (!db_record_file_create(db, filepath, exe_id, timestamp))
           { main_log("failed to record file creation %s", filepath); break; }
       }
-      if (metadata->mask & FAN_DELETE)
+      if (delete)
         db_record_file_delete(db, filepath, exe_id, timestamp);
     }
   }
@@ -456,8 +464,8 @@ int main_show(int argc, const char **argv) {
 
         static char ops[4] = {}; char *o = ops;
         if (q.exe_id == exe_id_create)
-          { *o++ = 'C'; printf("(%s) ", timestamp_localstring(time_create)); }
-        if (q.exe_id == exe_id_delete) *o++ = 'D';
+          { *o++ = '+'; printf("(%s) ", timestamp_localstring(time_create)); }
+        if (q.exe_id == exe_id_delete) *o++ = '-';
         *o++ = 0;
         printf("%s %s%s\n", ops, file_path, exist? "": " (deleted)");
       }
