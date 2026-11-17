@@ -182,23 +182,27 @@ int main_monitor(int argc, const char **argv) {
   // TODO fini
   struct fatrack fatrack = {};
   if (!fatrack_init(&fatrack, FAN_ONDIR | FAN_EVENT_ON_CHILD | FAN_CREATE | FAN_DELETE | FAN_MOVE)) {
-    main_log("failed to init fatrack: %s", fatrack.error); return 1;
+    main_log("failed to init fatrack: %s", fatrack.error);
+    pstrack_fini(&pstrack);
+    return 1;
   }
   // if (fatrack_haserror(&fatrack))
   //   main_log("fatrack: %s", fatrack.error);
 
-  while (main_running && argc) {
+  int ret = 0;
+
+  while (argc) {
     static char path[PATH_MAX];
     struct stat st;
     if (realpath(*argv, path) && !stat(path, &st) && S_ISDIR(st.st_mode)) {
       if (!fatrack_markpath(&fatrack, path)) {
         main_log("failed to record target directory: %s -> %s: %s", *argv, path, fatrack.error);
-        return 1;
+        ret = 1; goto on_end;
       }
     }
     else {
       main_log("invalid directory in argument: %s", *argv);
-      return 1;
+      ret = 1; goto on_end;
     }
     --argc; ++argv;
   }
@@ -298,7 +302,9 @@ int main_monitor(int argc, const char **argv) {
     }
   }
 
-  return 0;
+  on_end:
+  fatrack_fini(&fatrack); pstrack_fini(&pstrack);
+  return ret;
 }
 
 int main_config(int argc, const char **argv) {
