@@ -179,15 +179,12 @@ int main_monitor(int argc, const char **argv) {
     return 1;
   }
 
-  // TODO fini
   struct fatrack fatrack = {};
   if (!fatrack_init(&fatrack, FAN_ONDIR | FAN_EVENT_ON_CHILD | FAN_CREATE | FAN_DELETE | FAN_MOVE)) {
     main_log("failed to init fatrack: %s", fatrack.error);
     pstrack_fini(&pstrack);
     return 1;
   }
-  // if (fatrack_haserror(&fatrack))
-  //   main_log("fatrack: %s", fatrack.error);
 
   int ret = 0;
 
@@ -208,8 +205,6 @@ int main_monitor(int argc, const char **argv) {
   }
 
   fatrack_marksubmounts(&fatrack);
-  // if (fatrack_haserror(&fatrack))
-  //   main_log("failed to mark mountpoints: %s", fatrack.error);
 
   pid_t self_pid = getpid();
 
