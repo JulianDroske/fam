@@ -13,10 +13,10 @@ LIBS += -lsqlite3
 
 all: $(OUT)
 
-%.o: %.c $(DEPS) Makefile
+%.o: %.c $(DEPS) GNUmakefile
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(OUT): $(OBJS) Makefile
+$(OUT): $(OBJS) GNUmakefile
 	$(CC) -o $@ $(OBJS) $(LDFLAGS) $(LIBS)
 
 clean:
