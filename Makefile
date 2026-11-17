@@ -1,8 +1,8 @@
 
-DEPS := lib/tinyradix.h lib/fatrack.h lib/pstrack.h lib/tinycli.h
+DEPS := lib/tinyradix.h lib/tinycli.h lib/tinymap.h lib/fatrack.h lib/pstrack.h
 DEPS += pm.h main/db.c
 
-OBJS := lib/tinyradix.o lib/fatrack.o lib/pstrack.o lib/tinycli.o
+OBJS := lib/tinyradix.o lib/tinycli.o lib/tinymap.o lib/fatrack.o lib/pstrack.o
 OBJS += pm.o main.o
 
 OUT ?= fap
