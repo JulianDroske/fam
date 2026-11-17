@@ -10,6 +10,7 @@
 #include "string.h"
 #include "time.h"
 
+#include "signal.h"
 #include "unistd.h"
 #include "errno.h"
 #include "sys/stat.h"
@@ -45,6 +46,13 @@ const char *timestamp_localstring(int64_t timestamp) {
   time_t t = timestamp_time(timestamp);
   if (strftime(time, sizeof(time), "%x %X", localtime(&t)) <= 0) return NULL;
   return time;
+}
+
+int main_running = 1;
+void main_init_trap(int sig) {
+  if (!main_running) exit(2);
+  fprintf(stderr, "^C: requesting stop...\n^C again to force exit\n");
+  main_running = 0;
 }
 
 const char *main_default_database_pathname = "/var/lib/fap/fap.db";
@@ -179,7 +187,7 @@ int main_monitor(int argc, const char **argv) {
   // if (fatrack_haserror(&fatrack))
   //   main_log("fatrack: %s", fatrack.error);
 
-  while (argc) {
+  while (main_running && argc) {
     static char path[PATH_MAX];
     struct stat st;
     if (realpath(*argv, path) && !stat(path, &st) && S_ISDIR(st.st_mode)) {
@@ -201,7 +209,7 @@ int main_monitor(int argc, const char **argv) {
 
   pid_t self_pid = getpid();
 
-  while (pstrack_alive(&pstrack)) {
+  while (main_running && pstrack_alive(&pstrack)) {
     int64_t timestamp = get_timestamp();
 
     struct fatrack_event ev = {};
@@ -324,7 +332,7 @@ int main_config(int argc, const char **argv) {
     struct db_exepkgpm_query q = {
       .args = { exe_path, pkg_name, pm_name },
     };
-    while (db_query_exepkgpm(db, &q)) {
+    while (main_running && db_query_exepkgpm(db, &q)) {
       if (show_mode) {
         puts("");
         if (pkg_name) printf("[%s:%s]\n" "mask: %d\n", q.pm_name, q.pkg_name, q.pkg_ignored);
@@ -346,7 +354,7 @@ int main_config(int argc, const char **argv) {
       }
     }
     db_fini_query(&q.stmt);
-  } while (argc);
+  } while (main_running && argc);
 
   return 0;
 }
@@ -368,7 +376,7 @@ int main_list(int argc, const char **argv) {
   argc -= cliopts_len; argv += cliopts_len;
 
   struct db_fileexepkgpm_all_query q = { .args = { .include_nonexist = opt_all != NULL } };
-  while (db_query_fileexepkgpm_all(db, &q)) {
+  while (main_running && db_query_fileexepkgpm_all(db, &q)) {
     printf("%s", q.file_path);
     if (!q.file_exist) {
       printf(" (deleted");
@@ -420,7 +428,7 @@ int main_show(int argc, const char **argv) {
     struct db_exepkgpm_query q = {
       .args = { exe_path, pkg_name, pm_name },
     };
-    while (db_query_exepkgpm(db, &q)) {
+    while (main_running && db_query_exepkgpm(db, &q)) {
       if (organise_package && q.pkg_id) {
         if (last_pkg_id != q.pkg_id)
           printf("\n[%s:%s]\n", q.pm_name, q.pkg_name);
@@ -455,7 +463,7 @@ int main_show(int argc, const char **argv) {
       sqlite3_finalize(stmt);
     }
     if (q.stmt) sqlite3_finalize(q.stmt);
-  } while (argc);
+  } while (main_running && argc);
 
   return 0;
 }
@@ -489,7 +497,7 @@ int main_orphans(int argc, const char **argv) {
     "    (pkg.pkg_exist or (? or pkg.pkg_exist is not null));",
     "i", include_nopkg);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
+  while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
     const char *file_path, *exe_path, *pkg_name, *pm_name; int exe_id;
     int64_t time_create;
     db_stmt_columns(stmt, "sIisss",
@@ -535,7 +543,7 @@ int main_forget(int argc, const char **argv) {
   sqlite3_stmt *stmt = db_stmt(db, "delete from file where not file_exist returning file_path;", NULL);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
   const char *file_path;
-  while (db_stmt_next(stmt, "s", &file_path))
+  while (main_running && db_stmt_next(stmt, "s", &file_path))
     printf("%s\n", file_path);
   sqlite3_finalize(stmt);
 
@@ -571,7 +579,7 @@ int main_update(int argc, const char **argv) {
 
   sqlite3_stmt *stmt = db_stmt(db, "select file_path, file_exist from file;", NULL);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
+  while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
     const char *file_path; int file_exist;
     db_stmt_columns(stmt, "si", &file_path, &file_exist);
 
@@ -584,11 +592,13 @@ int main_update(int argc, const char **argv) {
   }
   sqlite3_finalize(stmt);
 
+  if (!main_running) return 0;
+
   /* program/exe */
 
   stmt = db_stmt(db, "select exe_id, exe_path, exe_exist, pkg_id from exe;", NULL);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
+  while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
     int exe_id, exe_exist, pkg_id; const char *exe_path;
     db_stmt_columns(stmt, "isii", &exe_id, &exe_path, &exe_exist, &pkg_id);
 
@@ -611,6 +621,8 @@ int main_update(int argc, const char **argv) {
   }
   sqlite3_finalize(stmt);
 
+  if (main_running) return 0;
+
   /* package */
 
   struct tinymap pkg_map = {};
@@ -623,7 +635,7 @@ int main_update(int argc, const char **argv) {
     "  from pkg left join pm on pm.pm_id = pkg.pm_id order by pkg.pm_id;", NULL);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
   int last_pm_id = 0; struct pm *pkg_pm = NULL;
-  while (sqlite3_step(stmt) == SQLITE_ROW) {
+  while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
     int pkg_id, pkg_exist, pm_id; const char *pkg_name, *pm_name;
     db_stmt_columns(stmt, "isiis", &pkg_id, &pkg_name, &pkg_exist, &pm_id, &pm_name);
 
@@ -675,6 +687,9 @@ struct main_command {
 };
 
 int main(int argc, const char **argv) {
+  struct sigaction sighandler = { .sa_handler = main_init_trap };
+  if (sigaction(SIGINT, &sighandler, NULL)) perror("sigaction");
+
   sqlite3_config(SQLITE_CONFIG_LOG, db_sqlite3_logger, NULL);
   setlinebuf(stdout);
 
