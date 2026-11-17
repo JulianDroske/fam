@@ -649,7 +649,6 @@ int main_update(int argc, const char **argv) {
 
     if (!pkg_pm) { main_log("skipped package %s", pkg_name); continue; }
 
-    // TODO optimize
     long int value = pkg_id & PM_TINYMAP_RESERVED_MASK;
     if (value != pkg_id) {
       main_log("tinymap mask overflow detected, abort update");
@@ -659,11 +658,6 @@ int main_update(int argc, const char **argv) {
 
     if (!tinymap_add(&pkg_map, pkg_name, strlen(pkg_name), value))
       main_log("warning: failed to add pkg %s into tinymap", pkg_name);
-    // if (pkg_pm->checkpkg(&exist, pkg_name)) {
-    //   if (exist != pkg_exist && !db_set_pkg_exist(db, pkg_id, exist))
-    //     main_log("failed to update status for package %s", pkg_name);
-    // }
-    // else main_log("failed to check status of package %s with pm %s", pkg_name, pm_name);
   }
   sqlite3_finalize(stmt);
   if (pkg_pm) main_update_pkgs(db, pkg_pm, &pkg_map);

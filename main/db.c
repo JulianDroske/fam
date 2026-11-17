@@ -265,7 +265,6 @@ int db_add_exe(sqlite3 *db, const char *pathname) {
 
 int db_get_exe_ignored(sqlite3 *db, int exe_id) {
   /* defaults to 0 on failure */
-  // TODO separate failure and ignored == 0 ?
   return db_eval_int(db, "select exe_ignored from exe where exe_id = ?;", "i", exe_id);
 }
 
