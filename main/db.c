@@ -111,12 +111,12 @@ const char *db_initsql =
   "  pm_id integer not null,"
   "  pkg_name text not null,"
   "  pkg_exist boolean not null,"
-  "  pkg_ignored boolean);"
+  "  pkg_ignored boolean not null);"
   "create table if not exists exe("
   "  exe_id integer primary key not null,"
   "  exe_path text not null,"
   "  exe_exist boolean not null,"
-  "  exe_ignored boolean,"
+  "  exe_ignored boolean not null,"
   "  pkg_id integer);"
   "create table if not exists file("
   "  file_path text primary key not null,"
@@ -259,7 +259,7 @@ int db_find_exe(sqlite3 *db, const char *exe_path) {
 
 int db_add_exe(sqlite3 *db, const char *pathname) {
   int exe_id = db_find_exe(db, pathname);
-  if (!exe_id) exe_id = db_eval_int_bystr(db, "insert into exe(exe_path, exe_exist, exe_ignored, pkg_id) values(?, true, false, 0) returning exe_id;", pathname);
+  if (!exe_id) exe_id = db_eval_int_bystr(db, "insert into exe(exe_path, exe_exist, exe_ignored, pkg_id) values(?, true, false, null) returning exe_id;", pathname);
   return exe_id;
 }
 

@@ -507,8 +507,9 @@ int main_orphans(int argc, const char **argv) {
     "  left join pkg on pkg.pkg_id = exe.pkg_id"
     "  left join pm on pm.pm_id = pkg.pm_id"
     "  where file.file_exist and"
-    "    (not exe.exe_exist or (not pkg.pkg_exist and"
-    "    (? or exe.pkg_id is not null) ));",
+    "    (not coalesce(exe.exe_exist, false) or"
+    "    (not coalesce(pkg.pkg_exist, false) and"
+    "      (? or coalesce(exe.pkg_id, 0)) ));",
     "i", include_nopkg);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
   while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
