@@ -235,8 +235,8 @@ int main_monitor(int argc, const char **argv) {
     }
 
     if (mask & filter_ops) {
-      static char ops[6];
-      char *o = ops; 
+      static char ops[8];
+      char *o = ops;
       /* reserved for further monitored operations */
       if (mask & FAN_OPEN) *o++ = 'O';
       if (mask & FAN_ACCESS) *o++ = 'A';
@@ -295,7 +295,7 @@ int main_monitor(int argc, const char **argv) {
     }
 
     const char *filepath = ev.filepath;
-    /* fanotify may report an event with CD */
+    /* fanotify may report an event with +- */
     if (!keep_deleted && delete)
       db_del_file(db, filepath);
     else {
