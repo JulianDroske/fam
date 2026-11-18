@@ -92,9 +92,9 @@ int parse_bool(int *ret, const char *arg) {
 }
 
 void print_help() {
-  main_log("%s",
+  fprintf(stderr, "%s",
     "fap - file app process monitor (demo)" "\n"
-    "usage: fap [options..] <command> [params..]" "\n"
+    "usage: fap [option...] <command> [param...]" "\n"
     "\n"
     "options:" "\n"
     "  -h, --help                show this help and exit" "\n"
@@ -103,9 +103,8 @@ void print_help() {
     "                            available: apk, dpkg" "\n"
     "\n"
     "commands & params:" "\n"
-    "\n"
-    "| m, monitor [dirs...]      monitor file changes and save to database" "\n"
-    "                            defaults to monitoring all dirs (/)" "\n"
+    "| m, monitor [dir...]       monitor file changes and save to database" "\n"
+    "                              defaults to monitoring all dirs (/)" "\n"
     "    -n, --dry-run             - do not write to database" "\n"
     "    -o, --operations <ops>    - filter file operations on output" "\n"
     "                                  +: create, -: delete" "\n"
@@ -116,15 +115,14 @@ void print_help() {
     "                                  %P - exe pid  %N - target file path" "\n"
     "                                  %O - operation(s)" "\n"
     "    -a, --all                 - also record deleted files" "\n"
-    "| c, config [progs/pkgs...] set behaviour for programs" "\n"
-    "                            list props when no option is given" "\n"
-    "    -m, --mask <bool>         - whether to treat an operation being performed" "\n"
-    "                                by the parent process" "\n"
+    "| c, config [exe/pkg...]    set/list settings for programs" "\n"
+    "                              see below for argument format" "\n"
+    "    -m, --mask <bool>         - set whether to treat an operation being" "\n"
+    "                                performed by the parent process" "\n"
     "| l, list                   list known files and related programs" "\n"
     "    -a, --all                 - also show deleted files" "\n"
-    "| s, show [progs/pkgs...]   show programs and file changes" "\n"
-    "                            progs... format: [<pm>:]<pkg> or <program_path>" "\n"
-    "                            <program_path> should begin with '/'" "\n"
+    "| s, show [exe/pkg...]      show programs with their file changes" "\n"
+    "                              see below for argument format" "\n"
     "    -p, --package             - catagorise as packages if possible" "\n"
     "    -c, --creation            - only show related file creation" "\n"
     "    -a, --all                 - also show deleted files" "\n"
@@ -133,6 +131,10 @@ void print_help() {
     "    --delete                  - delete these files and forget them" "\n"
     "| f, forget                 clean records of deleted files" "\n"
     "| u, update                 recheck file, program and package status" "\n"
+    "\n"
+    "formats:" "\n"
+    "  exe/pkg                   <executable path> | [<package manager>:]<package>" "\n"
+    "                            <executable path> shall begin with '/'" "\n"
   );
 }
 
