@@ -72,6 +72,7 @@ void parse_exepkgpm(const char **dest_exe_path, const char **dest_pkg_name, cons
   if (*arg == '/') exe_path = arg;
   else {
     /* pkg_name with optional pm_name */
+    // TODO use more reasonable length specifier
     static char name[PATH_MAX]; strncpy(name, arg, sizeof(name));
     pkg_name = name;
     char *colon = strchr(pkg_name, ':');
@@ -127,12 +128,17 @@ void print_help() {
     "    -c, --creation            - only show related file creation" "\n"
     "    -a, --all                 - also show deleted files" "\n"
     "| o, orphans                list files created by uninstalled programs" "\n"
-    "    -a, --all                 - include programs with no pm/package detected" "\n"
-    "    --delete                  - delete these files and forget them" "\n"
-    "| f, forget                 clean records of deleted files" "\n"
+    "    -a, --all                 - also show deleted files" "\n"
+    "    --forget                  - delete records of these files in database" "\n"
+    "    --delete                  - delete these files" "\n"
+    "| f, forget <type> <arg...> delete specific type of records in database" "\n"
+    "    #type        #arg" "\n"
+    "    file         path         forget files" "\n"
+    "    exe          path         forget executables with all related files" "\n"
+    "    pkg, package pm:pkg       forget packages with all related exe and file records" "\n"
     "| u, update                 recheck file, program and package status" "\n"
     "\n"
-    "formats:" "\n"
+    "argument formats:" "\n"
     "  exe/pkg                   <executable path> | [<package manager>:]<package>" "\n"
     "                            <executable path> shall begin with '/'" "\n"
   );
@@ -486,9 +492,10 @@ int main_show(int argc, const char **argv) {
 int main_orphans(int argc, const char **argv) {
   sqlite3 *db = main_db;
 
-  const char **opt_all = NULL, **opt_delete;
+  const char **opt_all = NULL, **opt_forget = NULL, **opt_delete = NULL;
   struct tinycli_option opts[] = {
     { "all", 'a', 0, &opt_all },
+    { "forget", 0, 0, &opt_forget },
     { "delete", 0, 0, &opt_delete },
     { NULL }
   };
@@ -500,8 +507,9 @@ int main_orphans(int argc, const char **argv) {
   }
   argc -= cliopts_len; argv += cliopts_len;
 
-  int include_nopkg = opt_all != NULL;
-  int perform_delete = opt_delete != NULL;
+  int show_delete = opt_all != NULL,
+    perform_forget = opt_forget != NULL,
+    perform_delete = opt_delete != NULL;
 
   sqlite3_stmt *stmt = db_stmt(db,
     "select file.file_path, file.file_time_create, exe.exe_id, exe.exe_path,"
@@ -509,11 +517,11 @@ int main_orphans(int argc, const char **argv) {
     "  left join exe on exe.exe_id = file.exe_id_create"
     "  left join pkg on pkg.pkg_id = exe.pkg_id"
     "  left join pm on pm.pm_id = pkg.pm_id"
-    "  where file.file_exist and"
+    "  where (? or file.file_exist) and"
     "    (not coalesce(exe.exe_exist, false) or"
-    "    (not coalesce(pkg.pkg_exist, false) and"
-    "      (? or coalesce(exe.pkg_id, 0)) ));",
-    "i", include_nopkg);
+    /* include records with no pkg assigned */
+    "    not coalesce(pkg.pkg_exist, true));",
+    "i", show_delete);
   if (!stmt) { main_log("failed to prepare sql query"); return 1; }
   while (main_running && sqlite3_step(stmt) == SQLITE_ROW) {
     const char *file_path, *exe_path, *pkg_name, *pm_name; int exe_id;
@@ -527,16 +535,22 @@ int main_orphans(int argc, const char **argv) {
     if (pkg_name && pm_name) printf(" [%s:%s]", pm_name, pkg_name);
     puts("");
 
-    if (perform_delete) {
+    int exist = 0;
+    if (perform_delete && check_file_exist(&exist, file_path) && exist) {
       /*
         remove() from C standard quals to unlink() for files and rmdir()
         for directories, the latter will success only on empty ones.
       */
       if (!remove(file_path)) {
         if (!db_set_file_exist(db, file_path, 0, get_timestamp()))
-          main_log("failed to record file deletion");
+          main_log("failed to record file deletion for %s", file_path);
       }
-      else main_log("failed to remove %s: %d", errno);
+      else main_log("failed to delete %s: %d", file_path, errno);
+    }
+
+    if (perform_forget) {
+      if (!db_del_file(db, file_path))
+        main_log("failed to delete record for file %s", file_path);
     }
   }
   sqlite3_finalize(stmt);
@@ -547,9 +561,7 @@ int main_orphans(int argc, const char **argv) {
 int main_forget(int argc, const char **argv) {
   sqlite3 *db = main_db;
 
-  struct tinycli_option opts[] = {
-    { NULL }
-  };
+  struct tinycli_option opts[] = { { NULL } };
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
@@ -558,12 +570,61 @@ int main_forget(int argc, const char **argv) {
   }
   argc -= cliopts_len; argv += cliopts_len;
 
-  sqlite3_stmt *stmt = db_stmt(db, "delete from file where not file_exist returning file_path;", NULL);
-  if (!stmt) { main_log("failed to prepare sql query"); return 1; }
-  const char *file_path;
-  while (main_running && db_stmt_next(stmt, "s", &file_path))
-    printf("%s\n", file_path);
-  sqlite3_finalize(stmt);
+  if (argc < 2) {
+    main_log("needs at least a <type> with an <arg>");
+    print_help(); return 1;
+  }
+
+  const char *type = *argv++; --argc;
+  if (!strcmp(type, "file")) {
+    while (argc) {
+      const char *path = *argv++; --argc;
+      if (!db_del_file(db, path))
+        main_log("failed to delete record of file %s", path);
+    }
+  }
+  else if (!strcmp(type, "exe")) {
+    while (argc) {
+      const char *path = *argv++; --argc;
+      if (!db_del_exefile_byexepath(db, path))
+        main_log("failed to delete record of exe %s", path);
+    }
+  }
+  else if (!strcmp(type, "pkg") || !strcmp(type, "package")) {
+    while (argc) {
+      const char *pkg = *argv++; --argc;
+      const char *pkg_name = NULL, *pm_name = NULL;
+      parse_exepkgpm(NULL, &pkg_name, &pm_name, pkg);
+      if (!pkg_name || !pm_name)
+        { main_log("invalid package: '%s'", pkg); continue; }
+      int pkg_id = db_find_pkg_bypmnamepkgname(db, pm_name, pkg_name);
+      if (!pkg_id)
+        { main_log("failed to find package: %s", pkg); continue; }
+
+      struct db_exe_bypkg_query q = {
+        .args = { .pkg_id = pkg_id },
+      };
+      int error = 0;
+      while (main_running && db_query_exe_bypkg(db, &q)) {
+        if (!db_del_exefile_byexe(db, q.exe_id)) {
+          main_log("failed to delete record of exe %d", q.exe_id);
+          error = 1; break;
+        }
+      }
+      if (!db_fini_query(&q.stmt)) {
+        main_log("failed to fetch exe list with pkg id %d", pkg_id);
+        continue;
+      }
+      if (error) continue;
+
+      if (!db_del_pkg_updateexe(db, pkg_id))
+        main_log("failed to delete record of pkg %s", pkg);
+    }
+  }
+  else {
+    main_log("unrecognized type %s", type);
+    print_help(); return 1;
+  }
 
   return 0;
 }
@@ -635,6 +696,7 @@ int main_update(int argc, const char **argv) {
         else if (!db_set_exe_pkg(db, exe_id, pkg_id))
           main_log("failed to update package [%s:%s]", main_pm->name, name);
       }
+      else main_log("failed to query package for file %s", exe_path);
     }
   }
   sqlite3_finalize(stmt);

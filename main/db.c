@@ -226,8 +226,12 @@ int db_eval(sqlite3 *db, const char *sql, const char *spec, ...) {
 
 /* pm */
 
+int db_find_pm_byname(sqlite3 *db, const char *name) {
+  return db_eval_int_bystr(db, "select pm_id from pm where pm_name = ?;", name);
+}
+
 int db_add_pm(sqlite3 *db, const char *name) {
-  int pm_id = db_eval_int_bystr(db, "select pm_id from pm where pm_name = ?;", name);
+  int pm_id = db_find_pm_byname(db, name);
   if (!pm_id) pm_id = db_eval_int_bystr(db, "insert into pm(pm_name) values(?1) returning pm_id;", name);
   return pm_id;
 }
@@ -238,12 +242,18 @@ int db_find_pkg_byexe(sqlite3 *db, const char *exe_path) {
   return db_eval_int_bystr(db, "select exe.pkg_id from exe left join pkg on pkg.id = exe.pkg_id where exe.exe_path = ?;", exe_path);
 }
 
-int db_find_pkg(sqlite3 *db, int pm_id, const char *pkg_name) {
+int db_find_pkg_bypmpkgname(sqlite3 *db, int pm_id, const char *pkg_name) {
   return db_eval_int(db, "select pkg_id from pkg where pm_id = ? and pkg_name = ?;", "is", pm_id, pkg_name);
 }
 
+int db_find_pkg_bypmnamepkgname(sqlite3 *db, const char *pm_name, const char *pkg_name) {
+  return db_eval_int(db,
+    "select pkg_id from pkg left join pm on pm.pm_id = pkg.pm_id"
+    "  where pm.pm_name = ? and pkg.pkg_name = ?;", "ss", pm_name, pkg_name);
+}
+
 int db_add_pkg(sqlite3 *db, int pm_id, const char *pkg_name) {
-  int pkg_id = db_find_pkg(db, pm_id, pkg_name);
+  int pkg_id = db_find_pkg_bypmpkgname(db, pm_id, pkg_name);
   if (pkg_id) return pkg_id;
   return db_eval_int(db, "insert into pkg(pm_id, pkg_name, pkg_exist, pkg_ignored) values(?, ?, true, false) returning pkg_id;", "is", pm_id, pkg_name);
 }
@@ -256,25 +266,22 @@ int db_set_pkg_ignored(sqlite3 *db, int pkg_id, int ignored) {
   return db_eval_int(db, "update pkg set pkg_ignored = ?2 where pkg_id = ?1 returning pkg_id;", "ii", pkg_id, ignored);
 }
 
-// int db_del_exe(sqlite3 *db, const char *pathname) {
-//   int exe_id = db_get_exe(db, pathname);
-//   if (exe_id)
-//     return db_eval_int_bystr(db,
-//       "begin delexe;"
-//       "  update from file where file.exe_id = ?1;"
-//       "  delete from exe where exe_id = ?1 returning exe_id;"
-//       "commit delexe;", pathname);
-//   return 0;
-// }
+int db_del_pkg_updateexe(sqlite3 *db, int pkg_id) {
+  return db_eval_int(db,
+    "begin delpkg;"
+    "  update exe set pkg_id = NULL where pkg_id = ?1;"
+    "  delete from pkg where pkg_id = ?1;"
+    "commit delpkg;", "i", pkg_id);
+}
 
 /* exe */
 
-int db_find_exe(sqlite3 *db, const char *exe_path) {
+int db_find_exe_bypth(sqlite3 *db, const char *exe_path) {
   return db_eval_int_bystr(db, "select exe_id from exe where exe_path = ?;", exe_path);
 }
 
 int db_add_exe(sqlite3 *db, const char *pathname) {
-  int exe_id = db_find_exe(db, pathname);
+  int exe_id = db_find_exe_bypth(db, pathname);
   if (!exe_id) exe_id = db_eval_int_bystr(db, "insert into exe(exe_path, exe_exist, exe_ignored, pkg_id) values(?, true, false, null) returning exe_id;", pathname);
   return exe_id;
 }
@@ -313,6 +320,35 @@ int db_set_exe_ignored(sqlite3 *db, int exe_id, int ignored) {
 
 int db_set_exe_pkg(sqlite3 *db, int exe_id, int pkg_id) {
   return db_eval_int(db, "update exe set pkg_id = ?2 where exe_id = ?1 returning exe_id;", "ii", exe_id, pkg_id);
+}
+
+int db_del_exefile_byexe(sqlite3 *db, int exe_id) {
+  return db_eval_int(db,
+    "begin delexe;"
+    "  delete from file where exe_id_create = ?1 or exe_id_delete = ?1;"
+    "  delete from exe where exe_id = ?1 returning exe_id;"
+    "commit delexe;", "i", exe_id);
+}
+
+int db_del_exefile_byexepath(sqlite3 *db, const char *pathname) {
+  int exe_id = db_find_exe_bypth(db, pathname);
+  if (exe_id) return db_del_exefile_byexe(db, exe_id);
+  return 0;
+}
+
+struct db_exe_bypkg_query {
+  struct { int pkg_id; } args;
+  sqlite3_stmt *stmt;
+
+  int exe_id;
+};
+
+int db_query_exe_bypkg(sqlite3 *db, struct db_exe_bypkg_query *q) {
+  if (!q->stmt) q->stmt = db_stmt(db,
+    "select exe.exe_id from exe where exe.pkg_id = ?;",
+    "i", q->args.pkg_id);
+  if (!q->stmt) return 0;
+  return db_stmt_next(q->stmt, "i", &q->exe_id);
 }
 
 struct db_exepkgpm_query {
