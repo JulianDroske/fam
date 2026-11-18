@@ -10,10 +10,10 @@
 
 #include "sys/wait.h"
 
-void pm_trim(char *str) {
-  if (!str || !*str) return;
-  int len = strlen(str);
+size_t pm_trim(char *str, size_t len) {
+  if (!str || !*str || !len) return len;
   while (len && str[len - 1] == '\n') str[--len] = 0;
+  return len;
 }
 
 struct pm_exec {
@@ -66,7 +66,7 @@ int pm_exec_char_space(char ch) {
   return ch == ' ' || ch == '\n' || ch == '\r';
 }
 
-size_t pm_exec_readfield(struct pm_exec *e, char *dest, size_t len) {
+ssize_t pm_exec_readfield(struct pm_exec *e, char *dest, size_t len) {
   while (pm_exec_char_space(e->ch))
     if (!pm_exec_next(e, NULL)) break;
   size_t pos = 0, actual_len = 0;
@@ -75,8 +75,10 @@ size_t pm_exec_readfield(struct pm_exec *e, char *dest, size_t len) {
     ++actual_len;
     if (!pm_exec_next(e, NULL)) break;
   }
-  if (pos != actual_len)
+  if (pos != actual_len) {
     fprintf(stderr, "pm: field too long for buffer length %ld\n", len);
+    return -1;
+  }
   return pos;
 }
 
@@ -87,23 +89,25 @@ int pm_exec_skipline(struct pm_exec *e) {
 }
 
 int pm_exec_close(struct pm_exec *e) {
-  int ret = 1;
-  waitpid(e->pid, &ret, 0);
-  close(e->fd);
-  return !ret;
+  int status = 0;
+  pid_t ret = waitpid(e->pid, &status, 0);
+  if (e->fd >= 0) { close(e->fd); e->fd = -1; }
+  return ret == e->pid && WIFEXITED(status) && !WEXITSTATUS(status);
 }
 
-int pm_readexecv(char *buf, size_t size, const char *cmd, const char **argv) {
+ssize_t pm_readexecv(char *buf, size_t size, const char *cmd, const char **argv) {
   struct pm_exec e = {};
-  int len = 0; int ret = 1;
+  ssize_t len = 0; int ret = 1;
   if (!pm_exec_open(&e, cmd, argv)) return 0;
   if (buf && size) {
-    len = read(e.fd, buf, size); buf[len] = 0;
+    len = read(e.fd, buf, size - 1);
+    if (len >= 0) buf[len] = 0;
   }
-  return pm_exec_close(&e);
+  if (!pm_exec_close(&e)) return -1;
+  return len;
 }
 
-int pm_readexec(char *buf, size_t size, const char *cmd, ...) {
+ssize_t pm_readexec(char *buf, size_t size, const char *cmd, ...) {
   static const char *argv[16] = {};
   int argv_len = 0;
 
@@ -144,17 +148,18 @@ char *pm_copy_tinymap_keys(char **argv, struct tinymap *map) {
 int pm_apk_avail() { return !system("command -v apk > /dev/null 2>&1;"); }
 
 int pm_apk_queryfile(char *dest_pkg_name, const char *filepath) {
-  if (!pm_readexec(dest_pkg_name, PM_NAME_MAX, "apk", "apk", "info", "-qW", filepath, NULL))
-    return 0;
-  pm_trim(dest_pkg_name);
-  return 1;
+  ssize_t len = pm_readexec(dest_pkg_name, PM_NAME_MAX, "apk", "apk", "info", "-qW", filepath, NULL);
+  if (len <= 0) return 0;
+  return pm_trim(dest_pkg_name, len) > 0;
 }
 
 int pm_apk_checkpkg(int *exist, const char *name) {
   static char output[PM_NAME_MAX];
-  if (!pm_readexec(output, sizeof(output), "apk", "apk", "info", "--installed", name, NULL))
-    return 0;
-  pm_trim(output); *exist = !strcmp(output, name);
+  ssize_t len = pm_readexec(output, sizeof(output), "apk", "apk", "info", "--installed", name, NULL);
+  if (len <= 0) return 0;
+  len = pm_trim(output, len);
+  if (!len) return 0;
+  *exist = !strcmp(output, name);
   return 1;
 }
 
@@ -177,7 +182,7 @@ int pm_apk_checkpkgs(struct tinymap *map) {
   if (!status) return 0;
 
   char buf[PM_NAME_MAX];
-  for (size_t len = 0; (len = pm_exec_readfield(&e, buf, PM_NAME_MAX)) > 0; len = 0) {
+  for (ssize_t len = 0; (len = pm_exec_readfield(&e, buf, PM_NAME_MAX)) > 0; len = 0) {
     struct tinymap_node *node = NULL;
     if (!tinymap_find(map, &node, buf, len)) {
       fprintf(stderr, "failed to find pkg %.*s in map\n", (int) len, buf);
@@ -193,8 +198,8 @@ int pm_apk_checkpkgs(struct tinymap *map) {
 int pm_dpkg_avail() { return !system("command -v dpkg > /dev/null 2>&1;"); }
 
 int pm_dpkg_queryfile(char *dest_pkg_name, const char *filepath) {
-  if (!pm_readexec(dest_pkg_name, PM_NAME_MAX, "dpkg", "dpkg", "-S", filepath, NULL))
-    return 0;
+  ssize_t len = pm_readexec(dest_pkg_name, PM_NAME_MAX, "dpkg", "dpkg", "-S", filepath, NULL);
+  if (len <= 0) return 0;
   char *colon = strchr(dest_pkg_name, ':');
   if (!colon) return 0;
   *colon = 0;
@@ -202,7 +207,7 @@ int pm_dpkg_queryfile(char *dest_pkg_name, const char *filepath) {
 }
 
 int pm_dpkg_checkpkg(int *exist, const char *name) {
-  return pm_readexec(NULL, 0, "dpkg", "dpkg", "-s", name, NULL);
+  return pm_readexec(NULL, 0, "dpkg", "dpkg", "-s", name, NULL) > 0;
 }
 
 int pm_dpkg_checkpkgs(struct tinymap *map) {
@@ -227,7 +232,7 @@ int pm_dpkg_checkpkgs(struct tinymap *map) {
   if (!status) return 0;
 
   char buf[PM_NAME_MAX];
-  for (size_t len = 0; (len = pm_exec_readfield(&e, buf, PM_NAME_MAX)) > 0; len = 0) {
+  for (ssize_t len = 0; (len = pm_exec_readfield(&e, buf, PM_NAME_MAX)) > 0; len = 0) {
     struct tinymap_node *node = NULL;
     if (!tinymap_find(map, &node, buf, len)) {
       fprintf(stderr, "failed to find pkg %.*s in map\n", (int) len, buf);
