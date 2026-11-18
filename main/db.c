@@ -233,7 +233,7 @@ int db_add_pkg(sqlite3 *db, int pm_id, const char *pkg_name) {
 }
 
 int db_set_pkg_exist(sqlite3 *db, int pkg_id, int exist) {
-  return db_eval_int(db, "update pkg set pkg_exist = ?2 where pkg_id = ?1 returning pkg_id;", "ii", pkg_id, exist);
+  return db_eval_int(db, "update pkg set pkg_exist = ?2 where pkg_id = ?1 returning pkg_id;", "ii", pkg_id, exist > 0);
 }
 
 int db_set_pkg_ignored(sqlite3 *db, int pkg_id, int ignored) {
@@ -283,12 +283,12 @@ int db_check_exe_ignored(sqlite3 *db, int exe_id) {
 int db_check_exe_exist(sqlite3 *db, int exe_id) {
   return db_eval_int(db,
     "select exe.exe_id from exe left join pkg on pkg.pkg_id = exe.pkg_id"
-    "  where exe_id = ? and exe.exe_exist and (pkg.pkg_exist is null or pkg.pkg_exist)",
+    "  where exe_id = ? and exe.exe_exist and coalesce(pkg.pkg_exist, true)",
     "i", exe_id);
 }
 
 int db_set_exe_exist(sqlite3 *db, int exe_id, int exist) {
-  return db_eval_int(db, "update exe set exe_exist = ?2 where exe_id = ?1 returning exe_id;", "ii", exe_id, exist);
+  return db_eval_int(db, "update exe set exe_exist = ?2 where exe_id = ?1 returning exe_id;", "ii", exe_id, exist > 0);
 }
 
 int db_set_exe_ignored(sqlite3 *db, int exe_id, int ignored) {
@@ -339,7 +339,7 @@ int db_set_file_exist(sqlite3 *db, const char *file_path, int exist, int64_t tim
   return db_eval_int(db,
     "update file set file_exist = ?2, exe_id_delete = null, file_time_delete = ?3"
     "  where file_path = ?1 returning file_path is not null;",
-    "si", file_path, exist, timestamp);
+    "si", file_path, exist > 0, timestamp);
 }
 
 int db_record_file_create(sqlite3 *db, const char *file_path, int exe_id, int64_t timestamp) {

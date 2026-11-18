@@ -581,7 +581,7 @@ int main_update_pkgs(sqlite3 *db, struct pm *pm, struct tinymap *pkg_map) {
     strncpy(name, key, node->key_len);
     if (!db_set_pkg_exist(db,
       node->value & PM_TINYMAP_RESERVED_MASK,
-      node->value & PM_TINYMAP_PKG_EXIST))
+      node->value & PM_TINYMAP_PKG_EXIST > 0))
       main_log("failed to set status of package %s", name);
   }
 
@@ -637,7 +637,7 @@ int main_update(int argc, const char **argv) {
   }
   sqlite3_finalize(stmt);
 
-  if (main_running) return 0;
+  if (!main_running) return 0;
 
   /* package */
 
