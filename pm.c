@@ -76,7 +76,7 @@ ssize_t pm_exec_readfield(struct pm_exec *e, char *dest, size_t len) {
     if (!pm_exec_next(e, NULL)) break;
   }
   if (pos != actual_len) {
-    fprintf(stderr, "pm: field too long for buffer length %ld\n", len);
+    fprintf(stderr, "pm: field too long %ld for buffer length %ld\n", actual_len, len);
     return -1;
   }
   return pos;
