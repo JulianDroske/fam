@@ -96,12 +96,15 @@ int pm_exec_close(struct pm_exec *e) {
 }
 
 ssize_t pm_readexecv(char *buf, size_t size, const char *cmd, const char **argv) {
+  if (size) --size;
   struct pm_exec e = {};
   ssize_t len = 0; int ret = 1;
   if (!pm_exec_open(&e, cmd, argv)) return 0;
   if (buf && size) {
-    len = read(e.fd, buf, size - 1);
-    if (len >= 0) buf[len] = 0;
+    char ch = 0;
+    while (len < size && pm_exec_next(&e, &ch))
+      buf[len++] = ch;
+    buf[len] = 0;
   }
   if (!pm_exec_close(&e)) return -1;
   return len;
