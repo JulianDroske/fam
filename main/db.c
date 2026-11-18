@@ -7,17 +7,6 @@
 #include "sys/stat.h"
 #include "linux/limits.h"
 
-// TODO fstat...
-void db_mkdirnames(const char *pathname) {
-  static char path[PATH_MAX];
-  strncpy(path, pathname, PATH_MAX);
-  size_t len = strlen(path);
-  for (char *p = path, *end = path + len; p < end; ++p) {
-    if (*p != '/') continue;
-    *p = 0; mkdir(path, 0755); *p = '/';
-  }
-}
-
 void db_sqlite3_logger(void *p, int code, const char *msg) {
   fprintf(stderr, "sqlite3: %s (%d)\n", msg, code);
 }
@@ -26,6 +15,33 @@ void db_logerror(const char *format, ...) {
   va_list args; va_start(args, format);
   fprintf(stderr, "db: "); vfprintf(stderr, format, args); fprintf(stderr, "\n");
   va_end(args);
+}
+
+int db_mkfiledirs(const char *pathname) {
+  static char path[PATH_MAX];
+  strncpy(path, pathname, PATH_MAX);
+  size_t len = strlen(path);
+  struct stat st = {};
+  char *p = path;
+  /* skip leading slashes */
+  while (*p == '/') ++p;
+  for (char *end = path + len; p < end; ++p) {
+    if (*p != '/') continue;
+    *p = 0;
+    if (!stat(path, &st)) {
+      if (!S_ISDIR(st.st_mode)) {
+        db_logerror("mkfiledirs: ancestor %s is not a dir", path);
+        return 0;
+      }
+    }
+    else if (mkdir(path, 0755)) {
+      db_logerror("mkfiledirs: failed for %s: %d", path, errno);
+      return 0;
+    }
+    *p = '/';
+    while (*p == '/') ++p;
+  }
+  return 1;
 }
 
 sqlite3_stmt *db_stmt_va(sqlite3 *db, const char *sql, const char *spec, va_list args) {
@@ -129,7 +145,7 @@ const char *db_initsql =
 
 sqlite3 *db_open(const char *pathname) {
   if (!pathname) return NULL;
-  db_mkdirnames(pathname);
+  db_mkfiledirs(pathname);
 
   sqlite3 *db = NULL;
   if (sqlite3_open(pathname, &db)) {
