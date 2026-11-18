@@ -86,8 +86,8 @@ void parse_exepkgpm(const char **dest_exe_path, const char **dest_pkg_name, cons
 int parse_bool(int *ret, const char *arg) {
   if (!arg || !*arg) return 0;
   switch (*arg) {
-  case 't': case 'T': case 'y': case 'Y': *ret = 1; return 1;
-  case 'f': case 'F': case 'n': case 'N': *ret = 0; return 1;
+  case 't': case 'T': case 'y': case 'Y': case '1': *ret = 1; return 1;
+  case 'f': case 'F': case 'n': case 'N': case '0': *ret = 0; return 1;
   }
   return 0;
 }
@@ -139,6 +139,8 @@ void print_help() {
     "| u, update                 recheck file, program and package status" "\n"
     "\n"
     "argument formats:" "\n"
+    "  bool                      true if starts with 't', 'T', 'y', 'Y' or '1'" "\n"
+    "                            false with          'f', 'F', 'n', 'N' or '0'" "\n"
     "  exe/pkg                   <executable path> | [<package manager>:]<package>" "\n"
     "                            <executable path> shall begin with '/'" "\n"
   );
