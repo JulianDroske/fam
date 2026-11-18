@@ -151,7 +151,7 @@ int main_monitor(int argc, const char **argv) {
   const char **opt_dryrun = NULL, **opt_operations = NULL,
     **opt_format = NULL, **opt_all = NULL;
   struct tinycli_option opts[] = {
-    { "dry-run", 'd', 0, &opt_dryrun },
+    { "dry-run", 'n', 0, &opt_dryrun },
     { "operations", 'o', 1, &opt_operations },
     { "format", 'f', 1, &opt_format },
     { "all", 'a', 0, &opt_all },
