@@ -19,8 +19,10 @@ void db_logerror(const char *format, ...) {
 
 int db_mkfiledirs(const char *pathname) {
   static char path[PATH_MAX];
-  strncpy(path, pathname, PATH_MAX);
-  size_t len = strlen(path);
+  size_t len = strlen(pathname);
+  if (len + 1 > sizeof(path)) return 0;
+  memcpy(path, pathname, len + 1);
+
   struct stat st = {};
   char *p = path;
   /* skip leading slashes */
@@ -79,7 +81,6 @@ void db_stmt_columns_va(sqlite3_stmt *stmt, const char *spec, va_list args) {
     case 'i': *va_arg(args, int *) = sqlite3_column_int(stmt, pos++); break;
     case 'I': *va_arg(args, int64_t *) = sqlite3_column_int64(stmt, pos++); break;
     case 's': *va_arg(args, const char **) = (char *) sqlite3_column_text(stmt, pos++); break;
-    // case 'S': strncpy(va_arg(args, char *), sqlite3_column_text(stmt, pos), va_arg(args, size_t)); break;
     default: break;
     }
   }

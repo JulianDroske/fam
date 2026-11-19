@@ -67,13 +67,16 @@ void main_log(const char *format, ...) {
   va_end(args);
 }
 
-void parse_exepkgpm(const char **dest_exe_path, const char **dest_pkg_name, const char **dest_pm_name, const char *arg) {
+int parse_exepkgpm(const char **dest_exe_path, const char **dest_pkg_name, const char **dest_pm_name, const char *arg) {
   const char *exe_path = NULL, *pkg_name = NULL, *pm_name = NULL;
+  if (!arg || !*arg) return 0;
   if (*arg == '/') exe_path = arg;
   else {
     /* pkg_name with optional pm_name */
-    // TODO use more reasonable length specifier
-    static char name[PATH_MAX]; strncpy(name, arg, sizeof(name));
+    static char name[PM_NAME_MAX * 2 + 1];
+    size_t size = strlen(arg) + 1;
+    if (size > sizeof(name)) return 0;
+    memcpy(name, arg, size);
     pkg_name = name;
     char *colon = strchr(pkg_name, ':');
     if (colon) { *colon = 0; pm_name = pkg_name; pkg_name = colon + 1; }
@@ -81,6 +84,7 @@ void parse_exepkgpm(const char **dest_exe_path, const char **dest_pkg_name, cons
   if (dest_exe_path) *dest_exe_path = exe_path;
   if (dest_pkg_name) *dest_pkg_name = pkg_name;
   if (dest_pm_name) *dest_pm_name = pm_name;
+  return 1;
 }
 
 int parse_bool(int *ret, const char *arg) {
@@ -349,7 +353,8 @@ int main_config(int argc, const char **argv) {
     const char *exe_path = NULL, *pkg_name = NULL, *pm_name = NULL;
     if (argc) {
       const char *arg = *argv++; --argc;
-      parse_exepkgpm(&exe_path, &pkg_name, &pm_name, arg);
+      if (!parse_exepkgpm(&exe_path, &pkg_name, &pm_name, arg))
+        { main_log("invalid exe/pkg: %s", arg); continue; }
     }
 
     struct db_exepkgpm_query q = {
@@ -445,7 +450,8 @@ int main_show(int argc, const char **argv) {
     const char *exe_path = NULL, *pkg_name = NULL, *pm_name = NULL;
     if (argc) {
       const char *arg = *argv++; --argc;
-      parse_exepkgpm(&exe_path, &pkg_name, &pm_name, arg);
+      if (!parse_exepkgpm(&exe_path, &pkg_name, &pm_name, arg))
+        { main_log("invalid exe/pkg: %s", arg); continue; }
     }
 
     struct db_exepkgpm_query q = {
@@ -604,9 +610,8 @@ int main_forget(int argc, const char **argv) {
     while (argc) {
       const char *pkg = *argv++; --argc;
       const char *pkg_name = NULL, *pm_name = NULL;
-      parse_exepkgpm(NULL, &pkg_name, &pm_name, pkg);
-      if (!pkg_name || !pm_name)
-        { main_log("invalid package: '%s'", pkg); continue; }
+      if (!parse_exepkgpm(NULL, &pkg_name, &pm_name, pkg) || !pkg_name || !pm_name)
+        { main_log("invalid package: %s", pkg); continue; }
       int pkg_id = db_find_pkg_bypmnamepkgname(db, pm_name, pkg_name);
       if (!pkg_id)
         { main_log("failed to find package: %s", pkg); continue; }
@@ -649,13 +654,12 @@ int main_update_pkgs(sqlite3 *db, struct pm *pm, struct tinymap *pkg_map) {
 
   struct tinymap_node *node = NULL;
   while (tinymap_enum(pkg_map, &node)) {
-    static char name[PM_NAME_MAX];
     const char *key = tinymap_node_key(pkg_map, node);
-    strncpy(name, key, node->key_len);
+    size_t len = node->key_len;
     if (!db_set_pkg_exist(db,
       node->value & PM_TINYMAP_RESERVED_MASK,
       node->value & PM_TINYMAP_PKG_EXIST > 0))
-      main_log("failed to set status of package %s", name);
+      main_log("failed to set status of package %.*s", (int) len, key);
   }
 
   return 1;

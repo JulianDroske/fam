@@ -140,7 +140,8 @@ char *pm_copy_tinymap_keys(char **argv, struct tinymap *map) {
   if (!buffer) { perror("pm_copy_tinymap_keys: malloc"); return 0; }
   struct tinymap_node *node = NULL;
   for (char *b = buffer; tinymap_enum(map, &node); b += node->key_len + 1) {
-    strncpy(b, tinymap_node_key(map, node), node->key_len);
+    memcpy(b, tinymap_node_key(map, node), node->key_len);
+    b[node->key_len] = 0;
     *argv++ = b;
   }
   return buffer;

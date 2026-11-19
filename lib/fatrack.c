@@ -245,10 +245,16 @@ int fatrack_next(struct fatrack *fatrack, struct fatrack_event *ev) {
     ev->filepath[0] = 0;
     if (!fatrack_readlinkf(ev->filepath, "/proc/self/fd/%d", fd))
       fatrack_seterrorf(fatrack, "failed to get filepath from fd: %d", fd, errno);
-    size_t dirpath_len = strlen(ev->filepath); ev->filepath[dirpath_len++] = '/';
-    strncpy(ev->filepath + dirpath_len, filename, PATH_MAX - dirpath_len);
 
     close(fd);
+
+    size_t dirpath_len = strlen(ev->filepath), filename_size = strlen(filename) + 1;
+    if (dirpath_len + filename_size > PATH_MAX) {
+      fatrack_seterrorf(fatrack, "file path too long: '%s' + '%s'", ev->filepath, filename);
+      continue;
+    }
+    ev->filepath[dirpath_len++] = '/';
+    memcpy(ev->filepath + dirpath_len, filename, filename_size);
 
     if (fatrack->paths_len && !fatrack_match_pathname(&fatrack->prefix_radix, ev->filepath, strlen(ev->filepath)))
       continue;

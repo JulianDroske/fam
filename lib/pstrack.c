@@ -233,7 +233,9 @@ int pstrack_query(struct pstrack *t, struct pstrack_procinfo *dest_procinfo, pid
   struct pstrack_proc *proc = t->procs + pid;
   if (!proc->appear) goto on_fail;
   dest_procinfo->ppid = proc->ppid;
-  if (!strncpy(dest_procinfo->pathname, proc->pathname, PATH_MAX)) goto on_fail;
+  size_t size = strlen(proc->pathname) + 1;
+  if (size > PATH_MAX) goto on_fail;
+  memcpy(dest_procinfo->pathname, proc->pathname, size);
 
   if (pthread_mutex_unlock(&t->mutex)) return 0;
   return 1;
