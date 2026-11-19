@@ -537,21 +537,29 @@ int main_orphans(int argc, const char **argv) {
     if (pkg_name && pm_name) printf(" [%s:%s]", pm_name, pkg_name);
     puts("");
 
-    int exist = 0;
-    if (perform_delete && check_file_exist(&exist, file_path) && exist) {
-      /*
-        remove() from C standard quals to unlink() for files and rmdir()
-        for directories, the latter will success only on empty ones.
-      */
-      if (!remove(file_path)) {
-        if (!db_set_file_exist(db, file_path, 0, get_timestamp()))
-          main_log("failed to record file deletion for %s", file_path);
+    int delete_error = 0;
+
+    if (perform_delete) {
+      delete_error = 1;
+      int exist = 0;
+      if (check_file_exist(&exist, file_path) && exist) {
+        /*
+          remove() from C standard quals to unlink() for files and rmdir()
+          for directories, the latter will success only on empty ones.
+        */
+        if (!remove(file_path)) {
+          if (db_set_file_exist(db, file_path, 0, get_timestamp()))
+            delete_error = 0;
+          else main_log("failed to record file deletion for %s", file_path);
+        }
+        else main_log("failed to delete %s: %d", file_path, errno);
       }
-      else main_log("failed to delete %s: %d", file_path, errno);
+      else main_log("failed to check file status of %s", file_path);
     }
 
     if (perform_forget) {
-      if (!db_del_file(db, file_path))
+      if (delete_error) main_log("skipped file %s: unsuccessful deletion", file_path);
+      else if (!db_del_file(db, file_path))
         main_log("failed to delete record for file %s", file_path);
     }
   }
