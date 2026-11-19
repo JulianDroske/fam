@@ -807,7 +807,7 @@ int main(int argc, const char **argv) {
     if (path && *path) db_path = path;
   }
   if (db_path && !*db_path) db_path = NULL;
-  main_db = db_open(db_path);
+  main_db = db_open(db_path, db_path == main_default_database_pathname);
   if (!main_db) {
     main_log("failed to open database %s", db_path);
     return 1;
@@ -842,7 +842,7 @@ int main(int argc, const char **argv) {
 
   on_end:
   main_pm = NULL;
-  if (main_db) sqlite3_close(main_db);
+  if (main_db) db_close(main_db);
   return ret;
 }
 

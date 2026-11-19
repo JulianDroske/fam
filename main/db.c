@@ -143,12 +143,19 @@ const char *db_initsql =
   "  file_time_delete integer);"
   "pragma journal_mode=WAL;";
 
-sqlite3 *db_open(const char *pathname) {
+int db_close(sqlite3 *db) {
+  return sqlite3_close_v2(db) == SQLITE_OK;
+}
+
+sqlite3 *db_open(const char *pathname, int create) {
   if (!pathname) return NULL;
-  db_mkfiledirs(pathname);
+  if (create) db_mkfiledirs(pathname);
+
+  int open_flags = SQLITE_OPEN_READWRITE;
+  if (create) open_flags |= SQLITE_OPEN_CREATE;
 
   sqlite3 *db = NULL;
-  if (sqlite3_open(pathname, &db)) {
+  if (sqlite3_open_v2(pathname, &db, open_flags, NULL)) {
     db_logerror("failed to open sqlite database %s", pathname);
     return NULL;
   }
@@ -157,12 +164,13 @@ sqlite3 *db_open(const char *pathname) {
   if (sqlite3_exec(db, db_initsql, NULL, NULL, &sqlerr)) {
     db_logerror("failed to init database: %s", sqlerr);
     sqlite3_free(sqlerr);
-    sqlite3_close(db);
+    db_close(db);
     return NULL;
   }
 
   return db;
 }
+
 
 int db_eval_int_bystr(sqlite3 *db, const char *sql, const char *string) {
   int i = 0;
