@@ -23,7 +23,8 @@ struct pm_exec {
 };
 
 int pm_exec_next(struct pm_exec *e, char *ch) {
-  if (e->eof || e->len <= 0 && e->inited) return 0;
+  if (e->eof) return 0;
+  if (e->inited && e->len <= 0) return 0;
   e->inited = 1;
   if (ch) *ch = e->ch;
 
@@ -98,7 +99,7 @@ int pm_exec_close(struct pm_exec *e) {
 ssize_t pm_readexecv(char *buf, size_t size, const char *cmd, const char **argv) {
   if (size) --size;
   struct pm_exec e = {};
-  ssize_t len = 0; int ret = 1;
+  ssize_t len = 0;
   if (!pm_exec_open(&e, cmd, argv)) return 0;
   if (buf && size) {
     char ch = 0;

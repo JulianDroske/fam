@@ -658,7 +658,7 @@ int main_update_pkgs(sqlite3 *db, struct pm *pm, struct tinymap *pkg_map) {
     size_t len = node->key_len;
     if (!db_set_pkg_exist(db,
       node->value & PM_TINYMAP_RESERVED_MASK,
-      node->value & PM_TINYMAP_PKG_EXIST > 0))
+      (node->value & PM_TINYMAP_PKG_EXIST) > 0))
       main_log("failed to set status of package %.*s", (int) len, key);
   }
 

@@ -59,7 +59,8 @@ int tinymap_find(struct tinymap *map, struct tinymap_node **dest_node, const cha
 
 /* dir: { -1: ->, 1: <- } */
 int tinymap_rot(struct tinymap *map, int *root_index, int dir) {
-  if (!dir) return 0; int i = dir > 0; dir = i? 1: -1;
+  if (!dir) return 0;
+  int i = dir > 0; dir = i? 1: -1;
   int index = *root_index;
 
   struct tinymap_node *node = &map->nodes[index];
@@ -95,7 +96,6 @@ int tinymap_fix(struct tinymap *map, int index) {
       /* node_index is always equal to index for insertion */
       int node_index = parent->children[parent->factor > 0];
       struct tinymap_node *node = &map->nodes[node_index];
-      int cc_index = node->children[node->factor > 0];
       if (node->factor * parent->factor < 0)
         if (!tinymap_rot(map, &node_index, -parent->factor)) return 0;
       node = &map->nodes[node_index];
