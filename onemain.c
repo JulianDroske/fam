@@ -1,5 +1,7 @@
 /* compile with -lsqlite3 */
 
+#define _GNU_SOURCE 1
+
 #include "lib/tinyradix.c"
 #include "lib/tinymap.c"
 #include "lib/tinycli.c"
