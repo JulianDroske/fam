@@ -244,7 +244,7 @@ int fatrack_next(struct fatrack *fatrack, struct fatrack_event *ev) {
     ev->metadata = *data;
     ev->filepath[0] = 0;
     if (!fatrack_readlinkf(ev->filepath, "/proc/self/fd/%d", fd))
-      fatrack_seterrorf(fatrack, "failed to get filepath from fd: %d", fd, errno);
+      fatrack_seterrorf(fatrack, "failed to get filepath from fd %d: %d", fd, errno);
 
     close(fd);
 
