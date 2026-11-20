@@ -95,8 +95,6 @@ void print_help() {
     "fam - file app monitor (demo)" "\n"
     "usage: fam [option...] <command> [command option...]" "\n"
     "\n"
-    "certain argument formats can be found at the end of this text" "\n"
-    "\n"
     "options:" "\n"
     "  -h, --help                show this help and exit" "\n"
     "  -D, --database <file>     specify database path" "\n"
@@ -105,7 +103,7 @@ void print_help() {
     "\n"
     "commands & options:" "\n"
     "| m, monitor [dir...]       monitor file changes and save to database" "\n"
-    "                              defaults to monitoring all dirs (/)" "\n"
+    "                            defaults to monitoring all dirs (/)" "\n"
     "    -l, --log, -n, --dry-run  - dry run, print without opening database" "\n"
     "    -o, --operations <ops>    - filter file operations on output, conjunction of:" "\n"
     "                                  '+': create, '-': delete" "\n"
@@ -142,6 +140,10 @@ void print_help() {
     "                            false with          'f', 'F', 'n', 'N' or '0'" "\n"
     "| exe/pkg                   <executable path> | [<package manager>:]<package>" "\n"
     "                            <executable path> shall begin with '/'" "\n"
+    "\n"
+    "environment variables:" "\n"
+    "| FAM_PM                    package manager name (--pm)" "\n"
+    "| FAM_DB                    database pathname (--database)" "\n"
   );
 }
 
