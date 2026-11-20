@@ -92,8 +92,8 @@ int parse_bool(int *ret, const char *arg) {
 
 void print_help() {
   fprintf(stderr, "%s",
-    "fap - file app process monitor (demo)" "\n"
-    "usage: fap [option...] <command> [command option...]" "\n"
+    "fam - file app monitor (demo)" "\n"
+    "usage: fam [option...] <command> [command option...]" "\n"
     "\n"
     "certain argument formats can be found at the end of this text" "\n"
     "\n"
@@ -145,7 +145,7 @@ void print_help() {
   );
 }
 
-const char *main_default_database_pathname = "/var/lib/fap/fap.db";
+const char *main_default_database_pathname = "/var/lib/fam/fam.db";
 
 struct main_context {
   const char *db_pathname, *pm_name;
@@ -866,14 +866,14 @@ int main(int argc, const char **argv) {
 
   const char *pm_name = NULL;
   if (opt_pm) pm_name = opt_pm[1];
-  else pm_name = getenv("FAP_PM");
+  else pm_name = getenv("FAM_PM");
   if (pm_name && !*pm_name) pm_name = NULL;
   main_context.pm_name = pm_name;
 
   const char *db_path = main_default_database_pathname;
   if (opt_database) { db_path = *opt_database; }
   else {
-    const char *path = getenv("FAP_DB");
+    const char *path = getenv("FAM_DB");
     if (path && *path) db_path = path;
   }
   if (db_path && !*db_path) db_path = NULL;

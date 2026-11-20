@@ -5,7 +5,7 @@ DEPS += pm.h main/db.c
 OBJS := lib/tinyradix.o lib/tinycli.o lib/tinymap.o lib/fatrack.o lib/pstrack.o
 OBJS += pm.o main.o
 
-OUT ?= fap
+OUT ?= fam
 
 CC ?= cc
 CFLAGS += -std=c99
