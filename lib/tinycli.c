@@ -31,3 +31,5 @@ int tinycli_parse(struct tinycli_option *opts, int argc, const char **argv) {
   return pos;
 }
 
+int tinycli_error_index(int ret) { return -ret - 1; }
+

@@ -8,6 +8,7 @@ struct tinycli_option {
 };
 
 int tinycli_parse(struct tinycli_option *opts, int argc, const char **argv);
+int tinycli_error_index(int ret);
 
 #endif
 

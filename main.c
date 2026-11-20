@@ -93,7 +93,7 @@ int parse_bool(int *ret, const char *arg) {
 void print_help() {
   fprintf(stderr, "%s",
     "fap - file app process monitor (demo)" "\n"
-    "usage: fap [option...] <command> [param...]" "\n"
+    "usage: fap [option...] <command> [command option...]" "\n"
     "\n"
     "options:" "\n"
     "  -h, --help                show this help and exit" "\n"
@@ -101,7 +101,7 @@ void print_help() {
     "  -P, --pm <name>           specify package manager to interact" "\n"
     "                            available: apk, dpkg" "\n"
     "\n"
-    "commands & params:" "\n"
+    "commands & options:" "\n"
     "| m, monitor [dir...]       monitor file changes and save to database" "\n"
     "                              defaults to monitoring all dirs (/)" "\n"
     "    -l, --log, -n, --dry-run  - dry run, print without opening database" "\n"
@@ -130,7 +130,7 @@ void print_help() {
     "    --forget                  - delete records of these files in database" "\n"
     "    --delete                  - delete these files" "\n"
     "| f, forget <type> <arg...> delete specific type of records in database" "\n"
-    "    #type        #arg" "\n"
+    "    type:        arg:" "\n"
     "    file         path         forget files" "\n"
     "    exe          path         forget executables with all related files" "\n"
     "    pkg, package pm:pkg       forget packages with all related exe and file records" "\n"
@@ -196,7 +196,7 @@ int main_monitor(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
@@ -379,7 +379,7 @@ int main_config(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
@@ -438,7 +438,7 @@ int main_list(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
@@ -476,7 +476,7 @@ int main_show(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
@@ -550,7 +550,7 @@ int main_orphans(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
@@ -621,7 +621,7 @@ int main_forget(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
@@ -833,7 +833,7 @@ int main(int argc, const char **argv) {
 
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
-    main_log("invalid argument around %s", argv[-cliopts_len - 1]);
+    main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
     print_help(); return 1;
   }
 
