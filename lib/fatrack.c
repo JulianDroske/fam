@@ -1,3 +1,5 @@
+/* references fatrace: https://github.com/martinpitt/fatrace */
+
 /* enables open_by_handle_at() */
 #ifndef _GNU_SOURCE
 #  define _GNU_SOURCE 1
