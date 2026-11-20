@@ -107,7 +107,10 @@ void print_help() {
     "| m, monitor [dir...]       monitor file changes and save to database" "\n"
     "                              defaults to monitoring all dirs (/)" "\n"
     "    -l, --log, -n, --dry-run  - dry run, print without opening database" "\n"
-    "    -o, --operations <ops>    - filter file operations on output" "\n"
+    "    -o, --operations <ops>    - filter file operations on output, conjunction of:" "\n"
+    "                                  '+': create, '-': delete" "\n"
+    "                                  '<': moved from, '>': moved to, '=': move" "\n"
+    "                                e.g. '+-' represents file creation and deletion" "\n"
     "    -f, --format <fmt>        - output format" "\n"
     "                                  %T - time     %E - exe full path" "\n"
     "                                  %P - exe pid  %N - target file path" "\n"
@@ -120,8 +123,9 @@ void print_help() {
     "    -a, --all                 - also show deleted files" "\n"
     "| s, show [exe/pkg...]      show programs with their file changes" "\n"
     "    -p, --package             - catagorise as packages if possible" "\n"
-    "    -c, --creation            - only show related file creation" "\n"
-    "    -a, --all                 - also show deleted files" "\n"
+    "    -o, --operation <op>      - only show file creations/deletions, one of:" "\n"
+    "                                  '+': creation, '-': deletion" "\n"
+    "    -e, --exist <bool>        - only show existing/nonexist files" "\n"
     "| o, orphans                list files created by uninstalled programs" "\n"
     "    -a, --all                 - also show deleted files" "\n"
     "    --forget                  - delete records of these files in database" "\n"
@@ -136,10 +140,6 @@ void print_help() {
     "argument formats:" "\n"
     "| bool                      true if starts with 't', 'T', 'y', 'Y' or '1'" "\n"
     "                            false with          'f', 'F', 'n', 'N' or '0'" "\n"
-    "| ops                       conjunction of the following chars:" "\n"
-    "                              '+': create, '-': delete" "\n"
-    "                              '<': move from, '>': move to, '=': move" "\n"
-    "                            e.g. '+-' represents file creation and deletion" "\n"
     "| exe/pkg                   <executable path> | [<package manager>:]<package>" "\n"
     "                            <executable path> shall begin with '/'" "\n"
   );
@@ -467,11 +467,13 @@ int main_list(int argc, const char **argv) {
 int main_show(int argc, const char **argv) {
   sqlite3 *db = main_context.db;
 
-  const char **opt_organise_package = NULL, **opt_creation = NULL, **opt_all = NULL;
+  const char **opt_organise_package = NULL,
+    **opt_operation = NULL,
+    **opt_exist = NULL;
   struct tinycli_option opts[] = {
     { "packages", 'p', 0, &opt_organise_package },
-    { "creation", 'c', 0, &opt_creation },
-    { "all", 'a', 0, &opt_all },
+    { "operation", 'o', 1, &opt_operation },
+    { "exist", 'e', 1, &opt_exist },
     { NULL }
   };
 
@@ -483,8 +485,24 @@ int main_show(int argc, const char **argv) {
   argc -= cliopts_len; argv += cliopts_len;
 
   int organise_package = opt_organise_package != NULL;
-  int only_creation = opt_creation != NULL;
-  int show_all = opt_all != NULL;
+  int only_creation = 0, only_deletion = 0;
+  if (opt_operation) {
+    const char *arg = opt_operation[1];
+    if (arg && !arg[1]) {
+      switch (arg[0]) {
+      case '+': only_creation = 1; break;
+      case '-': only_deletion = 1; break;
+      default: main_log("unrecognized filter: %s", arg); return 1;
+      }
+    }
+    else { main_log("invalid filter: %s", arg); return 1; }
+  }
+  int filter_exist = 0, has_filter_exist = 0;
+  if (opt_exist) {
+    has_filter_exist = 1;
+    if (!parse_bool(&filter_exist, opt_exist[1]))
+      { main_log("invalid bool: %s", opt_exist[1]); return 1; }
+  }
 
   int last_exe_id = 0, last_pkg_id = 0;
   do {
@@ -514,8 +532,9 @@ int main_show(int argc, const char **argv) {
 
       sqlite3_stmt *stmt = db_stmt(db,
         "select file_exist, file_path, file_time_create, exe_id_create, exe_id_delete from file"
-        "  where (file_exist or ?3) and (exe_id_create = ?1 or (not ?2 and exe_id_delete = ?1));",
-        "iii", q.exe_id, only_creation, show_all);
+        "  where (not ?5 or file_exist = ?4) and"
+        "  (not ?2 or exe_id_create = ?1) and (not ?3 or exe_id_delete = ?1);",
+        "iiiii", q.exe_id, only_creation, only_deletion, filter_exist, has_filter_exist);
       if (!stmt) { main_log("failed to prepare sql query"); continue; }
       while (sqlite3_step(stmt) == SQLITE_ROW) {
         int exist, exe_id_create, exe_id_delete; const char *file_path;
