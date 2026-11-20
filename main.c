@@ -200,7 +200,7 @@ int main_monitor(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
 
@@ -217,7 +217,7 @@ int main_monitor(int argc, const char **argv) {
       case '>': filter_ops |= FAN_MOVED_TO; break;
       case '=': filter_ops |= FAN_MOVE; break;
       default: main_log("unrecognized operation: %c", *s);
-        print_help(); return 1;
+        return 1;
       }
     }
   }
@@ -383,7 +383,7 @@ int main_config(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
 
@@ -442,7 +442,7 @@ int main_list(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
 
@@ -482,7 +482,7 @@ int main_show(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
 
@@ -573,7 +573,7 @@ int main_orphans(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
 
@@ -644,13 +644,13 @@ int main_forget(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
   argc -= cliopts_len; argv += cliopts_len;
 
   if (argc < 2) {
     main_log("needs at least a <type> with an <arg>");
-    print_help(); return 1;
+    return 1;
   }
 
   const char *type = *argv++; --argc;
@@ -700,7 +700,7 @@ int main_forget(int argc, const char **argv) {
   }
   else {
     main_log("unrecognized type %s", type);
-    print_help(); return 1;
+    return 1;
   }
 
   return 0;
@@ -856,7 +856,7 @@ int main(int argc, const char **argv) {
   int cliopts_len = tinycli_parse(opts, --argc, ++argv);
   if (cliopts_len < 0) {
     main_log("invalid argument around %s", argv[tinycli_error_index(cliopts_len)]);
-    print_help(); return 1;
+    return 1;
   }
 
   if (opt_help) { print_help(); return 0; }
@@ -880,7 +880,7 @@ int main(int argc, const char **argv) {
 
   if (!command) {
     main_log("unrecognized command: %s", name);
-    print_help(); return 1;
+    return 1;
   }
 
   /* init */
