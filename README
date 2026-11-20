@@ -1,0 +1,147 @@
+FAM (alpha)
+============================
+File - App monitor for Linux
+2026 @ juliandroske
+
+FAM can monitor certain files operations performed by processes and programs,
+and eventually detect garbage files created by programs that are no longer
+exist (uninstalled).
+
+Inspired by HDAS [1], FAM borns as a lightweight alternative based on
+fanotify (with netlink) instead of eBPF, as well as being written in C (C99)
+instead of Rust. (And without AI.)
+
+Requires Linux kernel 5.9+ with fanotify enabled (CONFIG_FANOTIFY=y), also
+root access for tracking file changes.
+
+Expects breaking changes before first release.
+
+
+BUILD
+-----
+
+Requires a C99 compiler and sqlite3 development files.
+
+With GNU make:
+  | $ make
+or simply with any C99 compiler:
+  | $ cc -o fam onemain.c -lsqlite3
+
+
+USAGE (main)
+------------
+
+For all command blocks in this section:
+  | # The command needs the root privilege
+  | $ Runnable as any user, will success with appropriate permissions
+
+fam [options...] <command> [command options...]
+
+FAM consists of a daemon that runs in background to keep the track of file
+operations, and a command line tool for users to analyse them; no IPC are
+engaged but a shared sqlite3 database is used. To start the daemon and
+monitor all file changes on the system:
+  | # fam monitor
+To focus on certain directories, run something like:
+  | # fam monitor $HOME/.config $HOME/.local
+
+Then, to see recorded file changes:
+  | $ fam list
+or organize the result by programs:
+  | $ fam show
+
+To show files associated with uninstalled programs:
+  | $ fam orphans
+options include '--delete' to remove these files (if exist), and '--forget'
+to let FAM forget all of these files.
+
+For full usage, run
+  | $ fam --help
+or see the same help text in main.c.
+
+
+USAGE (fatrace)
+---------------
+
+FAM can be used as a standalone file monitor, similar to fatrace but with
+fatrace/issue#52 fixed, like:
+  | # fam monitor -n
+Output options still apply. No database will be opened with this command.
+
+
+BUGS
+----
+
+Beyond current tests, FAM might not be able to catch every process and
+therefore lose minor amount of informations. For details see NOTES below.
+
+Several filesystems are not supported (references FAN_MARK_FILESYSTEM)
+because of the lack of fsid capability,
+
+fanotify(7)
+fsid
+> Note that some filesystems (e.g., fuse(4)) report zero fsid. In these cases,
+> it is not possible to use fsid to associate the event with a specific
+> filesystem instance, so monitoring different filesystem instances that
+> report zero fsid with the same fanotify group is not supported.
+
+including certain virtual filesystems, like procfs and sysfs, and some real
+ones (exfat, ...).
+
+
+NOTES
+-----
+
+The fanotify API reports PID with no further process information, causing the
+bug in fatrace [2] (issue#52) where executable path is not fetchable because
+the process exits immediately before fatrace receives it.
+
+To overcome this, FAM integrates process tracking based on netlink, also
+implemented in forkstat [3], which is, however, neither reliable as written
+in forkstat's README.md:
+
+> Note that forkstat uses the Linux netlink connector to gather process
+> activity and this may miss events if the system is overly busy. Netlink
+> connector also requires root privilege.
+
+while netlink reports never promise to precede fanotify events if a program
+calls open() right after exec().
+
+A preivous attempt was initializing fanotify with FAN_CLASS_CONTENT (or
+FAN_CLASS_PRE_CONTENT) and marking directories with a permission event
+FAN_OPEN_PERM to ensure process information are fetched before actual
+operations happen, as fatrace/issue#52 suggested, so that the process
+tracking or 'pstrack' can be abandoned while supporting older linux back to
+2.6; it works perfectly, however disables the capability of receiving file
+creation, movement and deletion events (so impossible with FAN_CREATE, ...
+and there are no such permission events as FAN_CREATE_PERM, ...), as manuals
+imply:
+
+fanotify_mark(2)
+FAN_OPEN_PERM
+> An fanotify file descriptor created with FAN_CLASS_PRE_CONTENT or
+> FAN_CLASS_CONTENT is required.
+FAN_CREATE
+> An fanotify group that identifies filesystem objects by file handles
+> is required.
+
+fanotify_init(2)
+FAN_REPORT_FID
+> This value allows the receipt of events which contain additional
+> information about the underlying filesystem object correlated to
+> an event.
+(enables FAN_CREATE)
+> The use of FAN_CLASS_CONTENT or FAN_CLASS_PRE_CONTENT is not permitted
+> with this flag and will result in the error EINVAL.
+(breaks FAN_OPEN_PERM)
+
+which is critical for associating certain file operations with processes.
+
+
+LINKS
+-----
+
+[1] HDAS       https://github.com/adelmonte/hdas
+[2] fatrace    https://github.com/martinpitt/fatrace
+[3] forkstat   https://github.com/ColinIanKing/forkstat
+
