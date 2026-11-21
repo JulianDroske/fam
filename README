@@ -14,13 +14,14 @@ instead of Rust. (And without AI.)
 Requires Linux kernel 5.9+ with fanotify enabled (CONFIG_FANOTIFY=y), also
 root access for tracking file changes.
 
-Expects breaking changes before first release.
+Expects breaking changes before first release. For current limitations and
+bugs, see BUGS below.
 
 
 BUILD
 -----
 
-Requires a C99 compiler and sqlite3 development files.
+Requires a C99 compiler and SQLite (>= 3.35.0) development files.
 
 With GNU make:
   | $ make
@@ -38,22 +39,42 @@ For all command blocks in this section:
 fam [options...] <command> [command options...]
 
 FAM consists of a daemon that runs in background to keep the track of file
-operations, and a command line tool for users to analyse them; no IPC are
-engaged but a shared sqlite3 database is used. To start the daemon and
-monitor all file changes on the system:
+operations, and a command line tool for users to analyse them; they do not
+depend on each other because no IPC are engaged but a shared SQLite database
+is used. To start the daemon and monitor all file changes on the system:
   | # fam monitor
 To focus on certain directories, run something like:
   | # fam monitor $HOME/.config $HOME/.local
+Multiple daemons can be run at the same time as long as their targets are not
+overlapped.
+
+To stop the daemon, press Ctrl+C or do a 'kill <FAM PID>' and FAM will
+gracefully exit soon as possible. Doing it again will trigger a force
+termination. If still not working, try 'kill -9 <FAM PID>'.
 
 Then, to see recorded file changes:
   | $ fam list
-or organize the result by programs:
+Or organize the result by programs:
   | $ fam show
+Executable paths or packages can also be passed like:
+  | $ fam show /bin/dd coreutils
+  | $ fam show dpkg busybox dpkg:bash
+where the "dpkg:" prefix indicates the package "bash" comes from dpkg package
+manager instead of other sources.
+
+You may "mask" certain executables or packages so that FAM will not treat
+them as the origin program who did the change to a file:
+  | $ fam config --mask true dpkg:bash
+After this, FAM will look for and record the nearest parent process which is
+not masked.
 
 To show files associated with uninstalled programs:
   | $ fam orphans
 options include '--delete' to remove these files (if exist), and '--forget'
-to let FAM forget all of these files.
+to let FAM forget all of these files. Note that FAM will not actively
+synchronize with current package managers, nor check executable existence, so
+it is suggested to do a manual scan in advance:
+  | $ fam update
 
 For full usage, run
   | $ fam --help
@@ -73,10 +94,10 @@ BUGS
 ----
 
 Beyond current tests, FAM might not be able to catch every process and
-therefore lose minor amount of informations. For details see NOTES below.
+therefore lose minor amount of information. For details see NOTES below.
 
-Several filesystems are not supported (references FAN_MARK_FILESYSTEM)
-because of the lack of fsid capability,
+Several filesystems are not supported (refers to FAN_MARK_FILESYSTEM) for the
+lack of fsid capability,
 
 fanotify(7)
 fsid
@@ -85,8 +106,15 @@ fsid
 > filesystem instance, so monitoring different filesystem instances that
 > report zero fsid with the same fanotify group is not supported.
 
-including certain virtual filesystems, like procfs and sysfs, and some real
+including certain virtual filesystems such as procfs and sysfs, and some real
 ones (exfat, ...).
+
+FAM will not monitor new mountpoints after the daemon has already started.
+
+Current design can contain race conditions as there are neither locks nor IPC
+between processes. A possible fix is to aggregate separated SQL queries into
+one single step so that operations can be protected by ACID properties. This
+should be fixed before first release.
 
 
 NOTES
@@ -113,9 +141,9 @@ FAN_OPEN_PERM to ensure process information are fetched before actual
 operations happen, as fatrace/issue#52 suggested, so that the process
 tracking or 'pstrack' can be abandoned while supporting older linux back to
 2.6; it works perfectly, however disables the capability of receiving file
-creation, movement and deletion events (so impossible with FAN_CREATE, ...
-and there are no such permission events as FAN_CREATE_PERM, ...), as manuals
-imply:
+creation, movement and deletion events (impossible with FAN_CREATE, ...
+while there are no such permission events as FAN_CREATE_PERM, ...), as
+manuals imply:
 
 fanotify_mark(2)
 FAN_OPEN_PERM
@@ -137,6 +165,15 @@ FAN_REPORT_FID
 
 which is critical for associating certain file operations with processes.
 
+On the database (SQLite) part, to get to know query failures, FAM for now
+utilises the non-standard "returning" clause introduced in SQLite "3.35.0
+(2021-03-12)". The Write-Ahead Logging (WAL) mode is also enabled to avoid
+write failures (SQLITE_BUSY), gaining more concurrency control as FAM allows
+at least two processes (daemon + cli) running simultaneously by design, but
+the choice is majorly based on two fixes in SQLite in 3.11.0 and 3.22.0 [4];
+under the hood SQLite acquires a region of shared memory (SHM) across
+processes, so the whole program still uses a little bit IPC internally.
+
 
 LINKS
 -----
@@ -144,4 +181,5 @@ LINKS
 [1] HDAS       https://github.com/adelmonte/hdas
 [2] fatrace    https://github.com/martinpitt/fatrace
 [3] forkstat   https://github.com/ColinIanKing/forkstat
+[4] SQLite WAL https://sqlite.org/wal.html
 
