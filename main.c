@@ -49,9 +49,10 @@ const char *timestamp_localstring(int64_t timestamp) {
 }
 
 int main_running = 1;
-void main_init_trap(int sig) {
+void main_proc_trap(int sig) {
   if (!main_running) exit(2);
-  fprintf(stderr, "^C: requesting stop...\n^C again to force exit\n");
+  const char *hint = sig == SIGINT? "^C": "KILL";
+  fprintf(stderr, "%s: requesting stop...\n%s again to force exit\n", hint, hint);
   main_running = 0;
 }
 
@@ -839,8 +840,11 @@ struct main_command {
 };
 
 int main(int argc, const char **argv) {
-  struct sigaction sighandler = { .sa_handler = main_init_trap };
-  if (sigaction(SIGINT, &sighandler, NULL)) perror("sigaction");
+  struct sigaction sighandler = { .sa_handler = main_proc_trap };
+  /* Ctrl+C */
+  if (sigaction(SIGINT, &sighandler, NULL)) perror("sigaction(SIGINT)");
+  /* kill */
+  if (sigaction(SIGTERM, &sighandler, NULL)) perror("sigaction(SIGTERM)");
 
   sqlite3_config(SQLITE_CONFIG_LOG, db_sqlite3_logger, NULL);
   setlinebuf(stdout);
